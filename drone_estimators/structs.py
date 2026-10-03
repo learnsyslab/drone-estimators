@@ -100,11 +100,11 @@ class UKFData:
     ) -> UKFData:
         """TODO."""
         dim_x = 13
-        if rotor_vel is None:
+        if rotor_vel is not None:
             dim_x = dim_x + 4
-        if dist_f is None:
+        if dist_f is not None:
             dim_x = dim_x + 3
-        if dist_t is None:
+        if dist_t is not None:
             dim_x = dim_x + 3
 
         covariance = np.eye(dim_x)

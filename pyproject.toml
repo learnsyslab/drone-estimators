@@ -20,7 +20,6 @@ dependencies = [
     "scipy>=1.17.0rc1",
     "drone-models>=0.1.0b0",
     "munch",
-    "transforms3d",
     "flax",
     "array-api-compat",
     "array-api-extra",

@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING
 # Identical console command: ROS_AUTOMATIC_DISCOVERY_RANGE="LOCALHOST"
 os.environ["ROS_AUTOMATIC_DISCOVERY_RANGE"] = "LOCALHOST"
 
+import jax
 import numpy as np
 import rclpy
 import toml
@@ -58,6 +59,10 @@ from drone_estimators.ros_nodes.ros2_utils import (
     find_transform,
     tf2array,
 )
+
+# The jitted legacy estimator needs 64 bit precision. The other estimators run on numpy and are
+# not affected. Since this runs on import, it also applies to the spawned estimator processes.
+jax.config.update("jax_enable_x64", True)
 
 if TYPE_CHECKING:
     from multiprocessing.sharedctypes import SynchronizedArray
