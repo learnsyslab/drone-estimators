@@ -23,7 +23,7 @@ import numpy as np
 from flax.struct import dataclass
 from scipy.spatial.transform import Rotation as R
 
-from drone_estimators.structs import UKFData
+from drone_estimators.structs.estimator_data import EstimatorData
 
 if TYPE_CHECKING:
     from drone_estimators._typing import Array  # To be changed to array_api_typing later
@@ -109,7 +109,7 @@ class StateEstimator(object):
         self._correct(self.data, self.settings, pos, quat, np.float64(0.0))
         self._update_estimate()
 
-    def predict(self, dt: float) -> UKFData:
+    def predict(self, dt: float) -> EstimatorData:
         """This function is not part of the legacy estimator and only for compatability."""
         # Since the legacy estimator doesn't inherently support the prediction/correction
         # form of a Kalman filter, we only step the time in the prediction step. In the
@@ -118,7 +118,7 @@ class StateEstimator(object):
         self.dt += dt
         return self._estimate
 
-    def correct(self, pos: Array, quat: Array) -> UKFData:
+    def correct(self, pos: Array, quat: Array) -> EstimatorData:
         """This function is not part of the legacy estimator and only for compatability."""
         pos = np.asarray(pos, dtype=np.float64)
         quat = np.asarray(quat, dtype=np.float64)
@@ -139,7 +139,7 @@ class StateEstimator(object):
     def _update_estimate(self):
         data = self.data
         pos, quat, vel, ang_vel = map(np.array, (data.pos, data.quat, data.vel, data.ang_vel))
-        self._estimate = UKFData.create(pos, quat, vel, ang_vel)
+        self._estimate = EstimatorData.create(pos, quat, vel, ang_vel)
 
 
 def legacy_correct(

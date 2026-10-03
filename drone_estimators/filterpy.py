@@ -23,11 +23,12 @@ from typing import TYPE_CHECKING
 import numpy as np
 from scipy.linalg import block_diag
 
-from drone_estimators.integration import integrate_UKFData
-from drone_estimators.structs import UKFData, UKFSettings
+from drone_estimators.structs.estimator_data import EstimatorData
+from drone_estimators.utils.integration import integrate_EstimatorData
 
 if TYPE_CHECKING:
     from drone_estimators._typing import Array  # To be changed to array_api_typing later
+    from drone_estimators.structs.ukf_data import UKFSettings
 
 # rotor_vel: Array | None = None,
 #     dist_f: Array | None = None,
@@ -35,14 +36,14 @@ if TYPE_CHECKING:
 
 
 # @jax.jit
-def ukf_predict_correct(data: UKFData, settings: UKFSettings) -> UKFData:
+def ukf_predict_correct(data: EstimatorData, settings: UKFSettings) -> EstimatorData:
     """TODO."""
     xp = data.pos.__array_namespace__()
     #### Predict
     # Calculate sigma points
     # TODO special sigma points for quaternions!
     sigmas = ukf_calculate_sigma_points(data, settings)
-    data_sigmas = UKFData.from_state_array(data, sigmas)
+    data_sigmas = EstimatorData.from_state_array(data, sigmas)
 
     # Pass sigma points through dynamics
     pos_dot, quat_dot, vel_dot, ang_vel_dot, rotor_vel_dot = settings.fx(
@@ -55,11 +56,11 @@ def ukf_predict_correct(data: UKFData, settings: UKFSettings) -> UKFData:
         dist_f=data_sigmas.dist_f,
         dist_t=data_sigmas.dist_t,
     )
-    data_sigmas_dot = UKFData.create(pos_dot, quat_dot, vel_dot, ang_vel_dot, rotor_vel_dot)
+    data_sigmas_dot = EstimatorData.create(pos_dot, quat_dot, vel_dot, ang_vel_dot, rotor_vel_dot)
 
     # Integrate dynamics if continuous
-    data_sigmas_f = integrate_UKFData(data_sigmas, data_sigmas_dot)
-    sigmas_f = UKFData.as_state_array(data_sigmas_f)
+    data_sigmas_f = integrate_EstimatorData(data_sigmas, data_sigmas_dot)
+    sigmas_f = EstimatorData.as_state_array(data_sigmas_f)
     data = data.replace(sigmas_f=sigmas_f)
 
     # Pass prior sigmas through measurment function h(x,u,dt) to get measurement sigmas
@@ -81,7 +82,7 @@ def ukf_predict_correct(data: UKFData, settings: UKFSettings) -> UKFData:
     )
 
     # save prior
-    data = UKFData.from_state_array(data, x)
+    data = EstimatorData.from_state_array(data, x)
     data = data.replace(covariance=P)
 
     #### Correct
@@ -95,7 +96,7 @@ def ukf_predict_correct(data: UKFData, settings: UKFSettings) -> UKFData:
 
     # compute cross variance
     Pxz = ukf_cross_variance(
-        UKFData.as_state_array(data), zp, data.sigmas_f, data.sigmas_h, settings.SPsettings.Wc
+        EstimatorData.as_state_array(data), zp, data.sigmas_f, data.sigmas_h, settings.SPsettings.Wc
     )
     # K = xp.dot(Pxz, data.SI)       # Kalman gain
     # K @ S = Pxz => K = Pxz @ S^-1 => or: S.T @ K.T = Pxz.T
@@ -104,7 +105,7 @@ def ukf_predict_correct(data: UKFData, settings: UKFSettings) -> UKFData:
     # data = data.replace(K=K, y=y)
 
     # Update Gaussian state estimate (x, P)
-    x = UKFData.as_state_array(data) + xp.dot(K, y)
+    x = EstimatorData.as_state_array(data) + xp.dot(K, y)
     # print(f"P prior = {xp.diag(P)}")
     # print(f"P prior = \n{P}")
     # Added identity for numerical stability
@@ -113,21 +114,21 @@ def ukf_predict_correct(data: UKFData, settings: UKFSettings) -> UKFData:
     # print(f"P post = \n{P}")
 
     # Save posterior
-    data = UKFData.from_state_array(data, x)
+    data = EstimatorData.from_state_array(data, x)
     data = data.replace(covariance=P)
 
     return data
 
 
 # @jax.jit
-def ukf_predict(data: UKFData, settings: UKFSettings) -> UKFData:
+def ukf_predict(data: EstimatorData, settings: UKFSettings) -> EstimatorData:
     """TODO."""
     # xp = data.pos.__array_namespace__()
     #### Predict
     # Calculate sigma pointstf.transform.rotation.x,
     # TODO special sigma points for quaternions!
     sigmas = ukf_calculate_sigma_points(data, settings)
-    data_sigmas = UKFData.from_state_array(data, sigmas)
+    data_sigmas = EstimatorData.from_state_array(data, sigmas)
 
     # Pass sigma points through dynamics
     pos_dot, quat_dot, vel_dot, ang_vel_dot, rotor_vel_dot = settings.fx(
@@ -141,11 +142,11 @@ def ukf_predict(data: UKFData, settings: UKFSettings) -> UKFData:
         dist_t=data_sigmas.dist_t,
     )
     # print(f"{pos_dot=}")
-    data_sigmas_dot = UKFData.create(pos_dot, quat_dot, vel_dot, ang_vel_dot, rotor_vel_dot)
+    data_sigmas_dot = EstimatorData.create(pos_dot, quat_dot, vel_dot, ang_vel_dot, rotor_vel_dot)
 
     # Integrate dynamics if continuous
-    data_sigmas_f = integrate_UKFData(data_sigmas, data_sigmas_dot)
-    sigmas_f = UKFData.as_state_array(data_sigmas_f)
+    data_sigmas_f = integrate_EstimatorData(data_sigmas, data_sigmas_dot)
+    sigmas_f = EstimatorData.as_state_array(data_sigmas_f)
     data = data.replace(sigmas_f=sigmas_f)
 
     # Pass prior sigmas through measurment function h(x,u,dt) to get measurement sigmas
@@ -167,14 +168,14 @@ def ukf_predict(data: UKFData, settings: UKFSettings) -> UKFData:
     )
 
     # save prior
-    data = UKFData.from_state_array(data, x)
+    data = EstimatorData.from_state_array(data, x)
     data = data.replace(covariance=P)
 
     return data
 
 
 # @jax.jit
-def ukf_correct(data: UKFData, settings: UKFSettings) -> UKFData:
+def ukf_correct(data: EstimatorData, settings: UKFSettings) -> EstimatorData:
     """TODO."""
     xp = data.covariance.__array_namespace__()
     # Pass mean and covariance of prediction through unscented transform
@@ -187,7 +188,7 @@ def ukf_correct(data: UKFData, settings: UKFSettings) -> UKFData:
 
     # compute cross variance
     Pxz = ukf_cross_variance(
-        UKFData.as_state_array(data), zp, data.sigmas_f, data.sigmas_h, settings.SPsettings.Wc
+        EstimatorData.as_state_array(data), zp, data.sigmas_f, data.sigmas_h, settings.SPsettings.Wc
     )
     # K = xp.dot(Pxz, data.SI)       # Kalman gain
     # K @ S = Pxz => K = Pxz @ S^-1 => or: S.T @ K.T = Pxz.T
@@ -196,7 +197,7 @@ def ukf_correct(data: UKFData, settings: UKFSettings) -> UKFData:
     # data = data.replace(K=K, y=y)
 
     # Update Gaussian state estimate (x, P)
-    x = UKFData.as_state_array(data) + xp.dot(K, y)
+    x = EstimatorData.as_state_array(data) + xp.dot(K, y)
     # print(f"P prior = {xp.diag(P)}")
     # print(f"P prior = \n{P}")
     # Added identity for numerical stability
@@ -205,13 +206,13 @@ def ukf_correct(data: UKFData, settings: UKFSettings) -> UKFData:
     # print(f"P post = \n{P}")
 
     # Save posterior
-    data = UKFData.from_state_array(data, x)
+    data = EstimatorData.from_state_array(data, x)
     data = data.replace(covariance=P)
 
     return data
 
 
-def ukf_calculate_sigma_points(data: UKFData, settings: UKFSettings) -> Array:
+def ukf_calculate_sigma_points(data: EstimatorData, settings: UKFSettings) -> Array:
     """TODO."""
     xp = data.pos.__array_namespace__()
     P = data.covariance
@@ -220,7 +221,7 @@ def ukf_calculate_sigma_points(data: UKFData, settings: UKFSettings) -> Array:
     P = P + xp.eye(P.shape[0]) * 1e-12
     U = xp.linalg.cholesky((settings.SPsettings.lambda_ + settings.SPsettings.n) * P, upper=True)
 
-    state_array = UKFData.as_state_array(data)
+    state_array = EstimatorData.as_state_array(data)
     sigma_center = state_array
     # TODO for the quaternions use more sophisitcated approach to keep length 1!
     # Mainly: rotate in tangent space

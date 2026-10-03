@@ -13,7 +13,7 @@ from drone_models import available_models, model_features
 from drone_models.drones import available_drones
 from scipy.spatial.transform import Rotation as R
 
-from drone_estimators.estimator import KalmanFilter
+from drone_estimators.estimator_kalman import KalmanFilter
 from drone_estimators.estimator_legacy import (
     LegacyData,
     LegacySettings,
@@ -57,6 +57,13 @@ def test_kalman(model_name: str, model: Callable, drone_type: str):
     kf.predict(1 / 240, np.array([0.0, 0.0, 0.0, 0.5]))
 
     kf.correct(np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0, 1.0]))
+
+
+@pytest.mark.unit
+def test_kalman_filter_type():
+    """Tests that only implemented filter types are accepted."""
+    with pytest.raises(AssertionError):
+        KalmanFilter(1 / 200, filter_type="EKF")
 
 
 LEGACY_PARAMS = (0.0001, 0.007, 0.09, 0.005, 0.07)

@@ -50,7 +50,7 @@ uv pip install -e .
 Either use the estimators directly:
 
 ```bash
-from drone_estimators.estimator import KalmanFilter
+from drone_estimators.estimator_kalman import KalmanFilter
 ```
 
 or run the `ROS2` node with:

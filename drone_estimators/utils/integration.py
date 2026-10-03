@@ -8,11 +8,11 @@ from scipy.spatial.transform import Rotation as R
 
 if TYPE_CHECKING:
     from drone_estimators._typing import Array  # To be changed to array_api_typing later
-    from drone_estimators.structs import UKFData
+    from drone_estimators.structs.estimator_data import EstimatorData
 
 
-def integrate_UKFData(state: UKFData, state_dot: UKFData) -> UKFData:
-    """Integrates UKFData properly."""
+def integrate_EstimatorData(state: EstimatorData, state_dot: EstimatorData) -> EstimatorData:
+    """Integrates EstimatorData properly."""
     next_pos, next_quat, next_vel, next_ang_vel, next_rotor_vel = _integrate(
         state.pos,
         state.quat,

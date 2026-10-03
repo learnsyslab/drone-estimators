@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from std_msgs.msg import Header
 
     from drone_estimators._typing import Array  # To be changed to array_api_typing later
-    from drone_estimators.structs import UKFData
+    from drone_estimators.structs.estimator_data import EstimatorData
 
 
 def find_transform(
@@ -241,7 +241,7 @@ def create_marker_array(
     return marker_array
 
 
-def append_state(data: defaultdict[str, list], time: float, state: UKFData):
+def append_state(data: defaultdict[str, list], time: float, state: EstimatorData):
     """Appends each states data to the corresponding of list in the dictionary."""
     data["time"].append(time)
     data["pos"].append(state.pos)

@@ -46,7 +46,7 @@ from std_srvs.srv import Trigger
 from tf2_msgs.msg import TFMessage
 from visualization_msgs.msg import MarkerArray
 
-from drone_estimators.estimator import KalmanFilter
+from drone_estimators.estimator_kalman import KalmanFilter
 from drone_estimators.estimator_legacy import StateEstimator
 from drone_estimators.ros_nodes.ros2_utils import (
     append_measurement,
