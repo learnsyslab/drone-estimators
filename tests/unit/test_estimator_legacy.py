@@ -100,3 +100,36 @@ def test_legacy_needs_x64():
     """Tests that the legacy estimator refuses to run in 32 bit."""
     with jax.enable_x64(False), pytest.raises(RuntimeError):
         StateEstimator(LEGACY_PARAMS)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("jit", [False, True])
+def test_legacy_batched(jit: bool):
+    """Tests that a batched estimator matches one estimator per drone.
+
+    Not every drone gets a measurement in every step, which is handled by the mask.
+    """
+    n_drones, n_steps, dt = 3, 50, 1 / 200
+    rng = np.random.default_rng(0)
+    t = np.arange(n_steps) * dt
+    pos = rng.normal(size=(n_drones, 1, 3)) + np.stack([np.sin(t), np.cos(t), t], axis=-1)
+    quat = R.from_rotvec(rng.normal(size=(n_drones, 1, 3)) * t[:, None]).as_quat()
+    has_meas = rng.random((n_steps, n_drones)) < 0.7
+    with jax.enable_x64(True):
+        batched = StateEstimator(LEGACY_PARAMS, batch_shape=(n_drones,), jit=jit)
+        batched.set_state(pos[:, 0], quat[:, 0])
+        single = [StateEstimator(LEGACY_PARAMS) for _ in range(n_drones)]
+        for i, estimator in enumerate(single):
+            estimator.set_state(pos[i, 0], quat[i, 0])
+        for k in range(1, n_steps):
+            # Invalid measurements of drones without a measurement must not be used
+            quat_k = np.where(has_meas[k, :, None], quat[:, k], 0.0)
+            batched.predict(dt)
+            batched.correct(pos[:, k], quat_k, mask=has_meas[k])
+            for i, estimator in enumerate(single):
+                estimator.predict(dt)
+                if has_meas[k, i]:
+                    estimator.correct(pos[i, k], quat[i, k])
+    for i, estimator in enumerate(single):
+        for x, x_single in zip(jax.tree.leaves(batched.data), jax.tree.leaves(estimator.data)):
+            assert np.allclose(x[i], x_single, rtol=1e-9, atol=1e-9)

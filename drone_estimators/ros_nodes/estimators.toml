@@ -8,7 +8,7 @@ frequency = 300      # frequency of the estimator. This should be >= Vicon frequ
 timings = true       # print the timings of each estimator
 save_data = false    # store the raw data and estimates into pickle files
 integrator = "euler" # TODO add RK4
-jit_compile = false  # TODO add jit compilation for faster estimators
+jit_compile = true   # jit compile the estimators with jax for faster estimators
 
 [estimator1]
 estimator_type = "ukf"

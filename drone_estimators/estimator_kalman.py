@@ -2,8 +2,11 @@
 
 from __future__ import absolute_import, annotations, division, print_function
 
+from functools import partial
 from typing import TYPE_CHECKING, Literal
 
+import jax
+import jax.numpy as jnp
 import numpy as np
 
 from drone_estimators.estimator import Estimator
@@ -34,6 +37,8 @@ class KalmanFilter(Estimator):
         estimate_dist_f: bool = False,
         estimate_dist_t: bool = False,
         initial_obs: dict[str, Array] | None = None,
+        batch_shape: tuple[int, ...] = (),
+        jit: bool = False,
     ):  # TODO give obs and info # analytical_mel_att
         """Initialize basic parameters.
 
@@ -46,6 +51,8 @@ class KalmanFilter(Estimator):
             estimate_dist_f: If the disturbance forces should be estimated, defaults to False.
             estimate_dist_t: If the disturbance torques should be estimated, defaults to False.
             initial_obs: Optional, the initial observation of the environment's state. See the environment's observation space for details.
+            batch_shape: The batch dimensions, e.g., (n_drones,). All arrays have leading batch dimensions.
+            jit: If the filter should be jit compiled with jax. Requires 64 bit precision.
         """
         assert filter_type == "UKF", f"Filter type {filter_type} is not implemented."
         fx = dynamics_function(model, config)
@@ -69,7 +76,9 @@ class KalmanFilter(Estimator):
             dist_t=estimate_dist_t,
             dim_u=dim_u,
             dim_z=dim_z,
+            batch_shape=batch_shape,
         )
+        self.batch_shape = batch_shape
 
         dim_x = EstimatorData.get_state_dim(self.data)
         # print(f"dim_x={dim_x}")
@@ -92,6 +101,24 @@ class KalmanFilter(Estimator):
         sigma_settings = SigmaPointsSettings.create(n=dim_x, alpha=1e-3, beta=2.0, kappa=0.0)
         self.settings = UKFSettings.create(SPsettings=sigma_settings, Q=Q, R=R, fx=fx, hx=hx)
 
+        self._predict = partial(ukf_predict, settings=self.settings)
+        self._correct = partial(ukf_correct, settings=self.settings)
+        self._predict_correct = partial(ukf_predict_correct, settings=self.settings)
+        if jit:
+            # The covariances span many orders of magnitude, which 32 bit can't resolve
+            if not jax.config.jax_enable_x64:
+                raise RuntimeError(
+                    "The jitted Kalman filter needs 64 bit precision. "
+                    'Call jax.config.update("jax_enable_x64", True) before creating it.'
+                )
+            self.data = jax.tree.map(jnp.asarray, self.data)
+            self._predict = jax.jit(self._predict)
+            self._correct = jax.jit(self._correct)
+            self._predict_correct = jax.jit(self._predict_correct)
+            # Compile now instead of when the first measurement arrives
+            mask = np.zeros(batch_shape, dtype=bool)
+            self._correct(self._predict(self.data, mask=mask), mask=mask)
+
         # Initialize state and covariance
         if initial_obs is not None:
             self.set_state(initial_obs["pos"], initial_obs["quat"])
@@ -102,8 +129,9 @@ class KalmanFilter(Estimator):
         With aggressive Q and R values, this needs to be called in the beginning. Otherwise the estimator might fail.
         """
         self.data = self.data.replace(pos=pos, quat=quat)
-        dim_x = EstimatorData.as_state_array(self.data).shape[0]
-        self.data = self.data.replace(covariance=np.eye(dim_x) * 1e-6)
+        dim_x = EstimatorData.as_state_array(self.data).shape[-1]
+        covariance = np.broadcast_to(np.eye(dim_x) * 1e-6, self.data.covariance.shape)
+        self.data = self.data.replace(covariance=covariance)
 
     def create_covariance_matrices(
         self,
@@ -241,8 +269,9 @@ class KalmanFilter(Estimator):
         Return:
             New state prediction
         """
-        # Check if time step is positive
-        if dt <= 0:
+        # Check if time step is positive. Only batch elements with a positive time step are updated
+        dt = np.broadcast_to(np.asarray(dt, dtype=np.float64), self.batch_shape)
+        if not np.any(dt > 0):
             return self.data
 
         # Update the input
@@ -251,19 +280,20 @@ class KalmanFilter(Estimator):
 
         # Update observation and dt
         # dt hast to be vectorized to work properly in jax
-        self.data = self.data.replace(z=np.concat((pos, quat)), dt=np.array([dt]))
+        self.data = self.data.replace(z=np.concat((pos, quat), axis=-1), dt=dt)
 
         # if self.data.dt > 0:  # TODO make dt check more elegant and catch all errors
         # self.data = ukf_predict(self.data, self.settings)
         # self.data = ukf_predict(self.data, self.settings)
-        self.data = ukf_predict_correct(self.data, self.settings)
+        self.data = self._predict_correct(self.data, mask=dt > 0)
 
         return self.data
 
     def predict(self, dt: float, command: Array | None = None) -> EstimatorData:
         """TODO."""
-        # Check if time step is positive
-        if dt <= 0:
+        # Check if time step is positive. Only batch elements with a positive time step are updated
+        dt = np.broadcast_to(np.asarray(dt, dtype=np.float64), self.batch_shape)
+        if not np.any(dt > 0):
             return self.data
 
         # Update the input
@@ -272,24 +302,26 @@ class KalmanFilter(Estimator):
 
         # Update observation and dt
         # dt hast to be vectorized to work properly in jax
-        self.data = self.data.replace(dt=np.array([dt]))
+        self.data = self.data.replace(dt=dt)
 
-        self.data = ukf_predict(self.data, self.settings)
+        self.data = self._predict(self.data, mask=dt > 0)
 
         return self.data
 
-    def correct(self, pos: Array, quat: Array, command: Array | None = None) -> EstimatorData:
-        """TODO."""
+    def correct(
+        self, pos: Array, quat: Array, command: Array | None = None, mask: Array | None = None
+    ) -> EstimatorData:
+        """TODO. If given, only batch elements where mask is True are corrected."""
         # Update the input
         if command is not None:
             self.set_input(command)
 
         # Update observation and dt
         # dt hast to be vectorized to work properly in jax
-        self.data = self.data.replace(z=np.concat((pos, quat)))
+        self.data = self.data.replace(z=np.concat((pos, quat), axis=-1))
 
         # print(f"{quat=}, {self.data.quat=}, {self.data.u[-2]=}")
 
-        self.data = ukf_correct(self.data, self.settings)
+        self.data = self._correct(self.data, mask=mask)
 
         return self.data

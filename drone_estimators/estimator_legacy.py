@@ -24,6 +24,7 @@ from flax.struct import dataclass
 from scipy.spatial.transform import Rotation as R
 
 from drone_estimators.structs.estimator_data import EstimatorData
+from drone_estimators.utils.batching import select
 
 if TYPE_CHECKING:
     from drone_estimators._typing import Array  # To be changed to array_api_typing later
@@ -62,10 +63,10 @@ class LegacyData:
     quat_prev: Array
 
     @classmethod
-    def create_empty(cls) -> LegacyData:
+    def create_empty(cls, batch_shape: tuple[int, ...] = ()) -> LegacyData:
         """Create the initial state."""
-        zeros = np.zeros(3)
-        quat = np.array([0.0, 0.0, 0.0, 1.0])
+        zeros = np.zeros((*batch_shape, 3))
+        quat = np.tile([0.0, 0.0, 0.0, 1.0], (*batch_shape, 1))
         return cls(
             pos=zeros,
             vel=zeros,
@@ -88,25 +89,34 @@ class StateEstimator(object):
     ----------
     filter_parameters : sequence of floats
         The 5 time constants of the low pass filters, see LegacySettings
+    batch_shape : tuple of ints
+        The batch dimensions, e.g., (n_drones,). All arrays have leading batch dimensions.
+    jit : bool
+        If the filter should be jit compiled with jax.
     """
 
-    def __init__(self, filter_parameters: tuple):
+    def __init__(
+        self, filter_parameters: tuple, batch_shape: tuple[int, ...] = (), jit: bool = True
+    ):
         """TODO."""
         # The numeric derivatives divide by dt (twice for the acceleration). In 32 bit, this
         # amplifies the rounding errors of the measurements too much.
-        if not jax.config.jax_enable_x64:
+        if jit and not jax.config.jax_enable_x64:
             raise RuntimeError(
                 "The legacy estimator needs 64 bit precision. "
                 'Call jax.config.update("jax_enable_x64", True) before creating it.'
             )
         self.settings = LegacySettings(*filter_parameters)
-        self.data = jax.tree.map(jnp.asarray, LegacyData.create_empty())
-        self.dt = 0.0  # Time since the last correction
+        self.data = LegacyData.create_empty(batch_shape)
+        self.dt = np.zeros(batch_shape)  # Time since the last correction
 
-        self._correct = jax.jit(legacy_correct)
-        # Compile now instead of when the first measurement arrives
-        pos, quat = np.zeros(3), np.array([0.0, 0.0, 0.0, 1.0])
-        self._correct(self.data, self.settings, pos, quat, np.float64(0.0))
+        self._correct = legacy_correct
+        if jit:
+            self.data = jax.tree.map(jnp.asarray, self.data)
+            self._correct = jax.jit(legacy_correct)
+            # Compile now instead of when the first measurement arrives
+            pos, quat, mask = self.data.pos, self.data.quat, np.zeros(batch_shape, dtype=bool)
+            self._correct(self.data, self.settings, pos, quat, self.dt, mask)
         self._update_estimate()
 
     def predict(self, dt: float) -> EstimatorData:
@@ -118,19 +128,22 @@ class StateEstimator(object):
         self.dt += dt
         return self._estimate
 
-    def correct(self, pos: Array, quat: Array) -> EstimatorData:
-        """This function is not part of the legacy estimator and only for compatability."""
+    def correct(self, pos: Array, quat: Array, mask: Array | None = None) -> EstimatorData:
+        """This function is not part of the legacy estimator and only for compatability.
+
+        If given, only batch elements where mask is True are corrected.
+        """
         pos = np.asarray(pos, dtype=np.float64)
         quat = np.asarray(quat, dtype=np.float64)
-        self.data = self._correct(self.data, self.settings, pos, quat, np.float64(self.dt))
-        self.dt = 0.0
+        self.data = self._correct(self.data, self.settings, pos, quat, self.dt, mask)
+        self.dt = np.where(True if mask is None else mask, 0.0, self.dt)
         self._update_estimate()
         return self._estimate
 
     def set_state(self, pos: Array, quat: Array):
         """This function is not part of the legacy estimator and only for compatability."""
-        pos = jnp.asarray(pos, dtype=jnp.float64)
-        quat = jnp.asarray(quat, dtype=jnp.float64)
+        pos = np.asarray(pos, dtype=np.float64)
+        quat = np.asarray(quat, dtype=np.float64)
         # Also use the state as the previous measurement. Otherwise, the first numeric
         # derivatives are computed from zero and cause a huge spike in the velocities.
         self.data = self.data.replace(pos=pos, quat=quat, pos_prev=pos, quat_prev=quat)
@@ -143,7 +156,12 @@ class StateEstimator(object):
 
 
 def legacy_correct(
-    data: LegacyData, settings: LegacySettings, pos: Array, quat: Array, dt: float
+    data: LegacyData,
+    settings: LegacySettings,
+    pos: Array,
+    quat: Array,
+    dt: float,
+    mask: Array | None = None,
 ) -> LegacyData:
     """Correct the estimate with a new measurement.
 
@@ -153,13 +171,22 @@ def legacy_correct(
         pos: The measured position.
         quat: The measured orientation.
         dt: The time since the last correction.
+        mask: Optional, only batch elements where mask is True are corrected.
 
     Returns:
         The corrected state.
     """
+    xp = data.pos.__array_namespace__()
+    data_in = data
+    if mask is not None:
+        # Batch elements without a measurement might contain invalid values, e.g., zero quaternions
+        pos = xp.where(mask[..., None], pos, data.pos)
+        quat = xp.where(mask[..., None], quat, data.quat)
+    dt = xp.asarray(dt)[..., None]  # Broadcast against the last axis
     data = compute_numerical_derivatives(data, pos, quat, dt)
     data = prior_update(data, dt)
-    return low_pass_filter(data, settings, pos, quat, dt)
+    data = low_pass_filter(data, settings, pos, quat, dt)
+    return data if mask is None else select(mask, data, data_in)
 
 
 def compute_numerical_derivatives(

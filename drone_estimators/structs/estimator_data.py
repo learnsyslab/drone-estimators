@@ -39,37 +39,38 @@ class EstimatorData:
         dist_t: bool = False,
         dim_u: int = 4,
         dim_z: int = 7,
+        batch_shape: tuple[int, ...] = (),
     ) -> EstimatorData:
         """TODO."""
-        pos = np.zeros(3)
-        quat = np.array([0, 0, 0, 1])
-        vel = np.zeros(3)
-        ang_vel = np.zeros(3)
+        pos = np.zeros((*batch_shape, 3))
+        quat = np.tile([0.0, 0.0, 0.0, 1.0], (*batch_shape, 1))
+        vel = np.zeros((*batch_shape, 3))
+        ang_vel = np.zeros((*batch_shape, 3))
         dim_x = 13
         if rotor_vel:
-            rotor_vel = np.zeros(4)
+            rotor_vel = np.zeros((*batch_shape, 4))
             dim_x = dim_x + 4
         else:
             rotor_vel = None
         if dist_f:
-            dist_f = np.zeros(3)
+            dist_f = np.zeros((*batch_shape, 3))
             dim_x = dim_x + 3
         else:
             dist_f = None
         if dist_t:
-            dist_t = np.zeros(3)
+            dist_t = np.zeros((*batch_shape, 3))
             dim_x = dim_x + 3
         else:
             dist_t = None
 
-        covariance = np.eye(dim_x)
+        covariance = np.tile(np.eye(dim_x), (*batch_shape, 1, 1))
 
-        sigmas_f = np.zeros((2 * dim_x + 1, dim_x))
-        sigmas_h = np.zeros((2 * dim_x + 1, dim_z))
+        sigmas_f = np.zeros((*batch_shape, 2 * dim_x + 1, dim_x))
+        sigmas_h = np.zeros((*batch_shape, 2 * dim_x + 1, dim_z))
 
-        u = np.zeros(dim_u)  # input
-        z = np.zeros(dim_z)  # measurement
-        dt = 1
+        u = np.zeros((*batch_shape, dim_u))  # input
+        z = np.zeros((*batch_shape, dim_z))  # measurement
+        dt = np.ones(batch_shape)
 
         return cls(
             pos,
@@ -99,6 +100,7 @@ class EstimatorData:
         dist_t: Array | None = None,
     ) -> EstimatorData:
         """TODO."""
+        batch_shape = pos.shape[:-1]
         dim_x = 13
         if rotor_vel is not None:
             dim_x = dim_x + 4
@@ -107,14 +109,14 @@ class EstimatorData:
         if dist_t is not None:
             dim_x = dim_x + 3
 
-        covariance = np.eye(dim_x)
+        covariance = np.tile(np.eye(dim_x), (*batch_shape, 1, 1))
 
-        sigmas_f = np.zeros((2 * dim_x + 1, dim_x))
-        sigmas_h = np.zeros((2 * dim_x + 1, 7))
+        sigmas_f = np.zeros((*batch_shape, 2 * dim_x + 1, dim_x))
+        sigmas_h = np.zeros((*batch_shape, 2 * dim_x + 1, 7))
 
-        u = np.zeros(4)  # input
-        z = np.zeros(7)  # measurement
-        dt = 1
+        u = np.zeros((*batch_shape, 4))  # input
+        z = np.zeros((*batch_shape, 7))  # measurement
+        dt = np.ones(batch_shape)
 
         return cls(
             pos,
