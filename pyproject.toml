@@ -18,7 +18,7 @@ dependencies = [
     "jax",
     "numpy>=2.0",
     "scipy>=1.17.0rc1",
-    "drone-models>=0.1.0b0",
+    "crazyflow @ git+https://github.com/learnsyslab/crazyflow.git@d28ec70d2478a230f1feb0fb3d644d1bbdbb8107",
     "munch",
     "flax",
     "array-api-compat",

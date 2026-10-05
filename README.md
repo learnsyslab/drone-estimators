@@ -40,9 +40,9 @@ pixi shell -e jazzy
 uv pip install -e .
 ```
 
-If you want to have the `drone-models` in editable mode, simply install them too with pip, i.e.,
+If you want to have `crazyflow` (which provides the dynamics models) in editable mode, simply install it too with pip, i.e.,
 ```bash
-cd ../drone-models
+cd ../crazyflow
 uv pip install -e .
 ```
 

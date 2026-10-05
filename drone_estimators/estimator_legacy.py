@@ -12,7 +12,7 @@ from __future__ import absolute_import, annotations, division, print_function
 import os
 
 # scipy's Rotation only works with jax arrays (and therefore in jit) if the array API is enabled.
-# This has to be set before scipy is imported, as drone_models does as well.
+# This has to be set before scipy is imported, as crazyflow does as well.
 os.environ["SCIPY_ARRAY_API"] = "1"
 
 from typing import TYPE_CHECKING

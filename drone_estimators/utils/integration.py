@@ -1,4 +1,7 @@
-"""Based on https://github.com/utiasDSL/crazyflow/blob/d38bb5c75fe6624972ccc18d89789d3636cfd8cd/crazyflow/sim/integration.py."""
+"""Based on https://github.com/learnsyslab/crazyflow/blob/d28ec70d2478a230f1feb0fb3d644d1bbdbb8107/crazyflow/sim/integration.py.
+
+Unlike crazyflow's version, this works with any array API backend and without rotor velocities.
+"""
 
 from __future__ import annotations
 
@@ -18,15 +21,14 @@ def integrate_EstimatorData(state: EstimatorData, state_dot: EstimatorData) -> E
         state.quat,
         state.vel,
         state.ang_vel,
+        state.rotor_vel,
         state_dot.pos,
-        state_dot.quat,
+        state.ang_vel,  # The orientation changes with the angular velocity
         state_dot.vel,
         state_dot.ang_vel,
-        state.dt,
-        state.rotor_vel,
         state_dot.rotor_vel,
+        state.dt,
     )
-    # TODO unit norm of quaternion!
     # TODO implement different integrator types later
     return state.replace(
         pos=next_pos, quat=next_quat, vel=next_vel, ang_vel=next_ang_vel, rotor_vel=next_rotor_vel
@@ -38,14 +40,14 @@ def _integrate(
     quat: Array,
     vel: Array,
     ang_vel: Array,
-    pos_dot: Array,
-    quat_dot: Array,
-    vel_dot: Array,
-    ang_vel_dot: Array,
+    rotor_vel: Array | None,
+    dpos: Array,
+    drot: Array,
+    dvel: Array,
+    dang_vel: Array,
+    drotor_vel: Array | None,
     dt: float,
-    rotor_vel: Array | None = None,
-    rotor_vel_dot: Array | None = None,
-) -> Array:  # TODO is actually tuple
+) -> tuple[Array, Array, Array, Array, Array | None]:
     """Integrate the dynamics forward in time.
 
     Args:
@@ -53,23 +55,23 @@ def _integrate(
         quat: The orientation of the drone as a quaternion.
         vel: The velocity of the drone.
         ang_vel: The angular velocity of the drone.
-        pos_dot: The derivative of the position of the drone.
-        quat_dot: The derivative of the quaternion of the drone.
-        vel_dot: The derivative of the velocity of the drone.
-        ang_vel_dot: The derivative of the angular velocity of the drone.
+        rotor_vel: The rotor velocity of the drone, None if not estimated.
+        dpos: The derivative of the position of the drone.
+        drot: The derivative of the quaternion of the drone (3D angular velocity).
+        dvel: The derivative of the velocity of the drone.
+        dang_vel: The derivative of the angular velocity of the drone.
+        drotor_vel: The derivative of the rotor velocity of the drone, None if not estimated.
         dt: The time step to integrate over.
-        rotor_vel: The forces for the motors.
-        rotor_vel_dot: The derivative of the motor forces.
 
     Returns:
-        The next position, quaternion, velocity, and roll, pitch, and yaw rates of the drone.
+        The next position, quaternion, velocity, angular velocity, and rotor velocity of the drone.
     """
-    next_pos = pos + pos_dot * dt
-    next_quat = (R.from_quat(quat) * R.from_rotvec(ang_vel * dt)).as_quat()
-    next_vel = vel + vel_dot * dt
-    next_ang_vel = ang_vel + ang_vel_dot * dt
-    next_rotor_vel = None
-    if rotor_vel is not None:
-        next_rotor_vel = rotor_vel + rotor_vel_dot * dt
-
+    xp = pos.__array_namespace__()
+    next_pos = pos + dpos * dt
+    # Prevent NaN gradients by setting extremely small rotations to 0, as crazyflow does
+    drot = xp.where(xp.abs(drot) < xp.finfo(drot.dtype).smallest_normal, 0.0, drot)
+    next_quat = (R.from_quat(quat) * R.from_rotvec(drot * dt)).as_quat()
+    next_vel = vel + dvel * dt
+    next_ang_vel = ang_vel + dang_vel * dt
+    next_rotor_vel = None if rotor_vel is None else rotor_vel + drotor_vel * dt
     return next_pos, next_quat, next_vel, next_ang_vel, next_rotor_vel

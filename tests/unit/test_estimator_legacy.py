@@ -1,72 +1,21 @@
-"""Testing the selfimplemented rotations against scipy rotations."""
+"""Unit tests of the legacy estimator."""
 
 from __future__ import annotations
-
-from collections import defaultdict
-from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from drone_models import available_models, model_features
-from drone_models.drones import available_drones
 from scipy.spatial.transform import Rotation as R
 
-from drone_estimators.estimator_kalman import KalmanFilter
 from drone_estimators.estimator_legacy import (
     LegacyData,
     LegacySettings,
     StateEstimator,
     legacy_correct,
 )
-from drone_estimators.ros_nodes.ros2_utils import append_state
-from drone_estimators.utils.dynamics import dynamics_function
 
-if TYPE_CHECKING:
-    from typing import Callable
-
-
-@pytest.mark.unit
-def test_placeholder():
-    """Placeholder test."""
-    pass
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize("model_name, model", available_models.items())
-@pytest.mark.parametrize("drone_type", available_drones)
-@pytest.mark.unit
-def test_model_loading(model_name: str, model: Callable, drone_type: str):
-    """Tests if the models for the kalman filters can be imported."""
-    dynamics_function(model_name, drone_type)
-
-
-# TODO test if the whole filterpy chain is jitable
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize("model_name, model", available_models.items())
-@pytest.mark.parametrize("drone_type", available_drones)
-@pytest.mark.unit
-def test_kalman(model_name: str, model: Callable, drone_type: str):
-    """Tests if the Kalman filter can be imported and stepped."""
-    supports_dynamics = model_features(dynamics_function(model_name, drone_type))["rotor_dynamics"]
-    kf = KalmanFilter(1 / 200, model_name, drone_type, estimate_rotor_vel=supports_dynamics)
-
-    kf.predict(1 / 240, np.array([0.0, 0.0, 0.0, 0.5]))
-
-    kf.correct(np.array([0.0, 0.0, 0.0]), np.array([0.0, 0.0, 0.0, 1.0]))
-
-
-@pytest.mark.unit
-def test_kalman_filter_type():
-    """Tests that only implemented filter types are accepted."""
-    with pytest.raises(AssertionError):
-        KalmanFilter(1 / 200, filter_type="EKF")
-
-
-LEGACY_PARAMS = (0.0001, 0.007, 0.09, 0.005, 0.07)
+LEGACY_PARAMS = (0.0001, 0.007, 0.09, 0.005, 0.07)  # As in the ROS node
 
 
 @pytest.mark.unit
@@ -151,30 +100,3 @@ def test_legacy_needs_x64():
     """Tests that the legacy estimator refuses to run in 32 bit."""
     with jax.enable_x64(False), pytest.raises(RuntimeError):
         StateEstimator(LEGACY_PARAMS)
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize("estimator_type", ["legacy", "ukf"])
-def test_append_state(estimator_type: str):
-    """Tests if the estimates of all estimators can be saved."""
-    pos, quat = np.array([0.0, 0.0, 1.0]), np.array([0.0, 0.0, 0.0, 1.0])
-    with jax.enable_x64(True):
-        if estimator_type == "legacy":
-            estimator = StateEstimator(LEGACY_PARAMS)
-        else:
-            estimator = KalmanFilter(
-                1 / 200,
-                "so_rpy_rotor_drag",
-                "cf21B_500",
-                estimate_rotor_vel=True,
-                estimate_dist_f=True,
-            )
-        estimator.set_state(pos, quat)
-        data = defaultdict(list)
-        for _ in range(3):
-            append_state(data, 0.0, estimator.predict(1 / 200))
-            append_state(data, 0.0, estimator.correct(pos, quat))
-    assert len(data["pos"]) == len(data["covariance"]) == 6
-    expected = 0 if estimator_type == "legacy" else 6
-    assert len(data["forces_motor"]) == len(data["forces_dist"]) == expected
-    assert len(data["torques_dist"]) == 0

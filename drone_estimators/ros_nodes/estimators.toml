@@ -1,7 +1,7 @@
 # Simply add your estimators as shown below
 
 # Supported types: legacy, ukf, TODO implement EKF
-# Supported models: See drone_models
+# Supported models and drone configs: See crazyflow.dynamics.Dynamics and crazyflow.drones.Drone
 
 [global] # global settings, can be overwritten by each estimator
 frequency = 300      # frequency of the estimator. This should be >= Vicon frequency

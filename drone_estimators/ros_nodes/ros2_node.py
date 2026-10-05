@@ -35,8 +35,9 @@ import rclpy
 import toml
 
 # Message types: https://docs.ros2.org/foxy/api/geometry_msgs/index-msg.html
-from drone_models.core import load_params
-from drone_models.transform import pwm2force
+from crazyflow.control import load_params as load_controller_params
+from crazyflow.control.transform import pwm2force
+from crazyflow.drones import Drone
 from geometry_msgs.msg import PoseStamped, TwistStamped, WrenchStamped
 from munch import Munch, munchify
 from rclpy.qos import QoSHistoryPolicy, QoSProfile, QoSReliabilityPolicy
@@ -174,7 +175,9 @@ class MPEstimator:
                     )
             case "ukf":
                 self.input_needed = True
-                self.params = load_params(self.settings.dynamics_model, self.settings.drone_config)
+                # The commands are converted from PWM to N like the onboard controller does
+                drone = Drone(self.settings.drone_config)
+                self.params = load_controller_params("mellinger", drone)["core"]
                 self.estimator = KalmanFilter(
                     dt=1 / self.frequency,
                     model=self.settings.dynamics_model,
