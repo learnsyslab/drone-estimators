@@ -480,7 +480,7 @@ class MPEstimator:
         shutdown: Event,
     ):
         rclpy.init()
-        node = rclpy.create_node("estimator_sub_" + "_".join(drone_names))
+        node = rclpy.create_node("estimator_pub_" + "_".join(drone_names))
         # TODO check if pubs are actually needed?
         qos_profile = QoSProfile(
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
