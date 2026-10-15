@@ -756,7 +756,6 @@ environments:
       - conda: https://prefix.dev/robostack-kilted/linux-64/ros-kilted-zstd-vendor-0.32.0-np2py312h31f38b3_14.conda
       - conda: https://prefix.dev/robostack-kilted/linux-64/ros2-distro-mutex-0.12.0-kilted_14.conda
       - pypi: ./
-      - pypi: git+https://github.com/learnsyslab/crazyflow.git?rev=d28ec70d2478a230f1feb0fb3d644d1bbdbb8107#d28ec70d2478a230f1feb0fb3d644d1bbdbb8107
       - pypi: https://files.pythonhosted.org/packages/12/0c/96102c01dd02ae740d4afc3644d5c7d7fc51d3feefd67300a2aa1ddbf7cb/chex-0.1.91-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1d/05/2709750ddb088eb2fc5053ba214b4f54334d15d4cb28217e2956b5507bac/array_api_extra-0.9.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/20/05/ed9b2571bbf38f1a2425391f18e3ac11cb1e91482c22d644a1640dea9da7/simplejson-3.20.2-cp312-cp312-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl
@@ -764,6 +763,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/24/ab/d7233c915b12c005655437c6c4cf0ae46cbbb2b20d743cb5e4881ad3104a/casadi-3.7.2-cp312-none-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/25/7a/b0178788f8dc6cafce37a212c99565fa1fe7872c70c6c9c1e1a372d9d88f/rich-14.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2a/09/f8d8f8f31e4483c10a906437b4ce31bdf3d6d417b73fe33f1a8b59e34228/einops-0.8.2-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/38/4e/6a51be94ae8e9dc8eaddd6ea74a6dde754448c4c746b51a232681f81e41c/gymnasium-1.4.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/38/f5/e495409d8273b95091073eea16ba496eebd77cbea720094b80650aad006a/crazyflow-0.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/3a/cb/28ce52eb94390dda42599c98ea0204d74799e4d8047a0eb559b6fd648056/ml_dtypes-0.5.4-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/43/2b/36e984399089c026a6499ac8f7401d38487cf0183839a4aa78140d373771/treescope-0.1.10-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/48/85/55addd16896343ea2731388028945576060139dda3c68a15d6b00158ef6f/tensorstore-0.1.80-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
@@ -791,7 +792,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/df/64/ff35eb9e54894cf471ff4716abd3c81eb0a0626869217ce3e6ba4ccf17d7/scipy-1.18.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/e0/b1/0542e0cab6f49f151a2d7a42400f84f706fc0b64e85dc1f56708b2e9fd37/array_api_compat-1.12.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e7/98/87b5946356095738cb90a6df7b35ff69ac5750f6e783d5fbcc5cb3b6cbd7/etils-1.13.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/e9/73/fda6a25f3beeb5e49d74330b44092b9e5a547395ccd478d1103ddcbff1fc/gymnasium-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/eb/4b/3c7e373d81219ee7493c1581c85a926c413ddeb3794cff87a37023a337e4/jaxlib-0.8.1-cp312-cp312-manylinux_2_27_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/f9/e7/19b8cfc8963b2e10a01a4db7bb27ec5fa39ecd024bc62f8e2d1de5625a9d/jax-0.8.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/fb/12/5911ae3eeec47800503a238d971e51722ccea5feb8569b735184d5fcdbc0/toolz-1.1.0-py3-none-any.whl
@@ -1554,7 +1554,6 @@ environments:
       - conda: https://prefix.dev/robostack-kilted/linux-64/ros-kilted-zstd-vendor-0.32.0-np2py312h31f38b3_14.conda
       - conda: https://prefix.dev/robostack-kilted/linux-64/ros2-distro-mutex-0.12.0-kilted_14.conda
       - pypi: ./
-      - pypi: git+https://github.com/learnsyslab/crazyflow.git?rev=d28ec70d2478a230f1feb0fb3d644d1bbdbb8107#d28ec70d2478a230f1feb0fb3d644d1bbdbb8107
       - pypi: https://files.pythonhosted.org/packages/12/0c/96102c01dd02ae740d4afc3644d5c7d7fc51d3feefd67300a2aa1ddbf7cb/chex-0.1.91-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1d/05/2709750ddb088eb2fc5053ba214b4f54334d15d4cb28217e2956b5507bac/array_api_extra-0.9.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/20/05/ed9b2571bbf38f1a2425391f18e3ac11cb1e91482c22d644a1640dea9da7/simplejson-3.20.2-cp312-cp312-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl
@@ -1562,6 +1561,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/24/ab/d7233c915b12c005655437c6c4cf0ae46cbbb2b20d743cb5e4881ad3104a/casadi-3.7.2-cp312-none-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/25/7a/b0178788f8dc6cafce37a212c99565fa1fe7872c70c6c9c1e1a372d9d88f/rich-14.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2a/09/f8d8f8f31e4483c10a906437b4ce31bdf3d6d417b73fe33f1a8b59e34228/einops-0.8.2-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/38/4e/6a51be94ae8e9dc8eaddd6ea74a6dde754448c4c746b51a232681f81e41c/gymnasium-1.4.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/38/f5/e495409d8273b95091073eea16ba496eebd77cbea720094b80650aad006a/crazyflow-0.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/3a/7a/882d99539b19b1490cac5d77c67338d126e4122c8276bf640e411650c830/twine-6.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/3a/cb/28ce52eb94390dda42599c98ea0204d74799e4d8047a0eb559b6fd648056/ml_dtypes-0.5.4-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/3f/51/d4db610ef29373b879047326cbf6fa98b6c1969d6f6dc423279de2b1be2c/requests_toolbelt-1.0.0-py2.py3-none-any.whl
@@ -1602,7 +1603,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/e0/b1/0542e0cab6f49f151a2d7a42400f84f706fc0b64e85dc1f56708b2e9fd37/array_api_compat-1.12.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e1/67/921ec3024056483db83953ae8e48079ad62b92db7880013ca77632921dd0/readme_renderer-44.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e7/98/87b5946356095738cb90a6df7b35ff69ac5750f6e783d5fbcc5cb3b6cbd7/etils-1.13.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/e9/73/fda6a25f3beeb5e49d74330b44092b9e5a547395ccd478d1103ddcbff1fc/gymnasium-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/eb/4b/3c7e373d81219ee7493c1581c85a926c413ddeb3794cff87a37023a337e4/jaxlib-0.8.1-cp312-cp312-manylinux_2_27_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/f9/e7/19b8cfc8963b2e10a01a4db7bb27ec5fa39ecd024bc62f8e2d1de5625a9d/jax-0.8.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/fb/12/5911ae3eeec47800503a238d971e51722ccea5feb8569b735184d5fcdbc0/toolz-1.1.0-py3-none-any.whl
@@ -2386,7 +2386,6 @@ environments:
       - conda: https://prefix.dev/robostack-kilted/linux-64/ros-kilted-zstd-vendor-0.32.0-np2py312h31f38b3_14.conda
       - conda: https://prefix.dev/robostack-kilted/linux-64/ros2-distro-mutex-0.12.0-kilted_14.conda
       - pypi: ./
-      - pypi: git+https://github.com/learnsyslab/crazyflow.git?rev=d28ec70d2478a230f1feb0fb3d644d1bbdbb8107#d28ec70d2478a230f1feb0fb3d644d1bbdbb8107
       - pypi: https://files.pythonhosted.org/packages/01/53/76c109e6f822a6d19befb0450c87330b9a6ce52353de6a9dda7892060a1f/mkdocs_section_index-0.3.10-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/12/0c/96102c01dd02ae740d4afc3644d5c7d7fc51d3feefd67300a2aa1ddbf7cb/chex-0.1.91-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1d/05/2709750ddb088eb2fc5053ba214b4f54334d15d4cb28217e2956b5507bac/array_api_extra-0.9.1-py3-none-any.whl
@@ -2395,6 +2394,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/24/ab/d7233c915b12c005655437c6c4cf0ae46cbbb2b20d743cb5e4881ad3104a/casadi-3.7.2-cp312-none-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/25/7a/b0178788f8dc6cafce37a212c99565fa1fe7872c70c6c9c1e1a372d9d88f/rich-14.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2a/09/f8d8f8f31e4483c10a906437b4ce31bdf3d6d417b73fe33f1a8b59e34228/einops-0.8.2-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/38/4e/6a51be94ae8e9dc8eaddd6ea74a6dde754448c4c746b51a232681f81e41c/gymnasium-1.4.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/38/f5/e495409d8273b95091073eea16ba496eebd77cbea720094b80650aad006a/crazyflow-0.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/3a/cb/28ce52eb94390dda42599c98ea0204d74799e4d8047a0eb559b6fd648056/ml_dtypes-0.5.4-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/43/2b/36e984399089c026a6499ac8f7401d38487cf0183839a4aa78140d373771/treescope-0.1.10-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/48/85/55addd16896343ea2731388028945576060139dda3c68a15d6b00158ef6f/tensorstore-0.1.80-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
@@ -2427,7 +2428,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/df/64/ff35eb9e54894cf471ff4716abd3c81eb0a0626869217ce3e6ba4ccf17d7/scipy-1.18.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/e0/b1/0542e0cab6f49f151a2d7a42400f84f706fc0b64e85dc1f56708b2e9fd37/array_api_compat-1.12.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e7/98/87b5946356095738cb90a6df7b35ff69ac5750f6e783d5fbcc5cb3b6cbd7/etils-1.13.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/e9/73/fda6a25f3beeb5e49d74330b44092b9e5a547395ccd478d1103ddcbff1fc/gymnasium-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/eb/4b/3c7e373d81219ee7493c1581c85a926c413ddeb3794cff87a37023a337e4/jaxlib-0.8.1-cp312-cp312-manylinux_2_27_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/ec/fc/80aa31b79133634721cf7855d37b76ea49773599214896f2ff10be03de2a/mkdocstrings-1.0.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f9/e7/19b8cfc8963b2e10a01a4db7bb27ec5fa39ecd024bc62f8e2d1de5625a9d/jax-0.8.1-py3-none-any.whl
@@ -3181,7 +3181,6 @@ environments:
       - conda: https://prefix.dev/robostack-kilted/linux-64/ros-kilted-zstd-vendor-0.32.0-np2py312h31f38b3_14.conda
       - conda: https://prefix.dev/robostack-kilted/linux-64/ros2-distro-mutex-0.12.0-kilted_14.conda
       - pypi: ./
-      - pypi: git+https://github.com/learnsyslab/crazyflow.git?rev=d28ec70d2478a230f1feb0fb3d644d1bbdbb8107#d28ec70d2478a230f1feb0fb3d644d1bbdbb8107
       - pypi: https://files.pythonhosted.org/packages/12/0c/96102c01dd02ae740d4afc3644d5c7d7fc51d3feefd67300a2aa1ddbf7cb/chex-0.1.91-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1d/05/2709750ddb088eb2fc5053ba214b4f54334d15d4cb28217e2956b5507bac/array_api_extra-0.9.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/20/05/ed9b2571bbf38f1a2425391f18e3ac11cb1e91482c22d644a1640dea9da7/simplejson-3.20.2-cp312-cp312-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl
@@ -3189,6 +3188,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/24/ab/d7233c915b12c005655437c6c4cf0ae46cbbb2b20d743cb5e4881ad3104a/casadi-3.7.2-cp312-none-manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/25/7a/b0178788f8dc6cafce37a212c99565fa1fe7872c70c6c9c1e1a372d9d88f/rich-14.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2a/09/f8d8f8f31e4483c10a906437b4ce31bdf3d6d417b73fe33f1a8b59e34228/einops-0.8.2-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/38/4e/6a51be94ae8e9dc8eaddd6ea74a6dde754448c4c746b51a232681f81e41c/gymnasium-1.4.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/38/f5/e495409d8273b95091073eea16ba496eebd77cbea720094b80650aad006a/crazyflow-0.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/3a/cb/28ce52eb94390dda42599c98ea0204d74799e4d8047a0eb559b6fd648056/ml_dtypes-0.5.4-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/43/2b/36e984399089c026a6499ac8f7401d38487cf0183839a4aa78140d373771/treescope-0.1.10-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/48/85/55addd16896343ea2731388028945576060139dda3c68a15d6b00158ef6f/tensorstore-0.1.80-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
@@ -3216,7 +3217,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/df/64/ff35eb9e54894cf471ff4716abd3c81eb0a0626869217ce3e6ba4ccf17d7/scipy-1.18.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/e0/b1/0542e0cab6f49f151a2d7a42400f84f706fc0b64e85dc1f56708b2e9fd37/array_api_compat-1.12.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e7/98/87b5946356095738cb90a6df7b35ff69ac5750f6e783d5fbcc5cb3b6cbd7/etils-1.13.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/e9/73/fda6a25f3beeb5e49d74330b44092b9e5a547395ccd478d1103ddcbff1fc/gymnasium-1.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/eb/4b/3c7e373d81219ee7493c1581c85a926c413ddeb3794cff87a37023a337e4/jaxlib-0.8.1-cp312-cp312-manylinux_2_27_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/f9/e7/19b8cfc8963b2e10a01a4db7bb27ec5fa39ecd024bc62f8e2d1de5625a9d/jax-0.8.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/fa/b6/3127540ecdf1464a00e5a01ee60a1b09175f6913f0644ac748494d9c4b21/pytest_timeout-2.4.0-py3-none-any.whl
@@ -16307,35 +16307,11 @@ packages:
   - jax
   - numpy>=2.0
   - scipy>=1.17.0rc1
-  - crazyflow @ git+https://github.com/learnsyslab/crazyflow.git@d28ec70d2478a230f1feb0fb3d644d1bbdbb8107
+  - crazyflow>=0.4.0
   - munch
   - flax
   - array-api-compat
   - array-api-extra
-- pypi: git+https://github.com/learnsyslab/crazyflow.git?rev=d28ec70d2478a230f1feb0fb3d644d1bbdbb8107#d28ec70d2478a230f1feb0fb3d644d1bbdbb8107
-  name: crazyflow
-  version: 0.3.2
-  requires_dist:
-  - numpy>=2.0.0
-  - scipy>=1.17.0
-  - jax>=0.7.0,!=0.10.2
-  - mujoco>=3.3.0,<3.11
-  - mujoco-mjx>=3.3.0
-  - gymnasium[mujoco]>=1.2.0
-  - imageio
-  - einops
-  - flax
-  - ml-collections
-  - casadi
-  - array-api-compat
-  - array-api-extra
-  - jax[cuda12] ; extra == 'gpu'
-  - fire ; extra == 'benchmark'
-  - matplotlib ; extra == 'benchmark'
-  - pandas ; extra == 'benchmark'
-  - pyinstrument ; extra == 'benchmark'
-  - splax[viewer]>=0.2.0 ; extra == 'splats'
-  requires_python: '>=3.11'
 - pypi: https://files.pythonhosted.org/packages/01/53/76c109e6f822a6d19befb0450c87330b9a6ce52353de6a9dda7892060a1f/mkdocs_section_index-0.3.10-py3-none-any.whl
   name: mkdocs-section-index
   version: 0.3.10
@@ -16397,6 +16373,68 @@ packages:
   version: 0.8.2
   sha256: 54058201ac7087911181bfec4af6091bb59380360f069276601256a76af08193
   requires_python: '>=3.9'
+- pypi: https://files.pythonhosted.org/packages/38/4e/6a51be94ae8e9dc8eaddd6ea74a6dde754448c4c746b51a232681f81e41c/gymnasium-1.4.0-py3-none-any.whl
+  name: gymnasium
+  version: 1.4.0
+  sha256: 1cb947c59e7c72d8eabb2c2274c00cd20948e69f8452a9ef4092223be24fdf0e
+  requires_dist:
+  - numpy>=1.22.0
+  - cloudpickle>=1.2.0
+  - typing-extensions>=4.12.0
+  - farama-notifications>=0.0.1
+  - ale-py>=0.9 ; extra == 'atari'
+  - pygame-ce>=2.1.3 ; extra == 'box2d'
+  - box2d==2.3.10 ; python_full_version < '3.14' and extra == 'box2d'
+  - box2d-py==2.3.8 ; python_full_version >= '3.14' and extra == 'box2d'
+  - swig==4.* ; python_full_version >= '3.14' and extra == 'box2d'
+  - pygame-ce>=2.1.3 ; extra == 'classic-control'
+  - mujoco>=2.1.5 ; extra == 'mujoco'
+  - imageio>=2.14.1 ; extra == 'mujoco'
+  - packaging>=23.0 ; extra == 'mujoco'
+  - pygame-ce>=2.1.3 ; extra == 'toy-text'
+  - jax>=0.4.16 ; extra == 'jax'
+  - jaxlib>=0.4.16 ; extra == 'jax'
+  - flax>=0.5.0 ; extra == 'jax'
+  - array-api-compat>=1.11.0 ; extra == 'jax'
+  - torch>=1.13.0 ; extra == 'torch'
+  - array-api-compat>=1.11.0 ; extra == 'torch'
+  - array-api-compat>=1.11.0 ; extra == 'array-api'
+  - packaging>=23.0 ; extra == 'array-api'
+  - moviepy>=1.0.0 ; extra == 'other'
+  - matplotlib>=3.0 ; extra == 'other'
+  - opencv-python>=3.0 ; extra == 'other'
+  - seaborn>=0.13 ; extra == 'other'
+  - gymnasium[array-api,atari,box2d,classic-control,jax,mujoco,other,torch,toy-text] ; extra == 'all'
+  - pytest>=7.1.3 ; extra == 'testing'
+  - scipy>=1.7.3 ; extra == 'testing'
+  - dill>=0.3.7 ; extra == 'testing'
+  - array-api-extra>=0.7.0 ; extra == 'testing'
+  requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/38/f5/e495409d8273b95091073eea16ba496eebd77cbea720094b80650aad006a/crazyflow-0.4.0-py3-none-any.whl
+  name: crazyflow
+  version: 0.4.0
+  sha256: db6d604149184c25691706c432f9fe878d9fb537df34b9410b004f5c519cf0d1
+  requires_dist:
+  - numpy>=2.0.0
+  - scipy>=1.17.0
+  - jax>=0.7.0,!=0.10.2
+  - mujoco>=3.3.0
+  - mujoco-mjx>=3.3.0
+  - gymnasium[mujoco]>=1.4.0
+  - imageio
+  - einops
+  - flax
+  - ml-collections
+  - casadi
+  - array-api-compat
+  - array-api-extra
+  - jax[cuda12] ; extra == 'gpu'
+  - fire ; extra == 'benchmark'
+  - matplotlib ; extra == 'benchmark'
+  - pandas ; extra == 'benchmark'
+  - pyinstrument ; extra == 'benchmark'
+  - splax[viewer]>=0.2.0 ; extra == 'splats'
+  requires_python: '>=3.11'
 - pypi: https://files.pythonhosted.org/packages/3a/7a/882d99539b19b1490cac5d77c67338d126e4122c8276bf640e411650c830/twine-6.2.0-py3-none-any.whl
   name: twine
   version: 6.2.0
@@ -17315,68 +17353,6 @@ packages:
   - tensorflow ; extra == 'etree-tf'
   - etils[etree] ; extra == 'etree-tf'
   - etils[ecolab] ; extra == 'lazy-imports'
-  requires_python: '>=3.10'
-- pypi: https://files.pythonhosted.org/packages/e9/73/fda6a25f3beeb5e49d74330b44092b9e5a547395ccd478d1103ddcbff1fc/gymnasium-1.3.0-py3-none-any.whl
-  name: gymnasium
-  version: 1.3.0
-  sha256: 6b8c159a8540dcbcb221722d7efda24d78ebbcbc3bd2ea1c2611aa2a34471fc2
-  requires_dist:
-  - numpy>=1.21.0
-  - cloudpickle>=1.2.0
-  - typing-extensions>=4.3.0
-  - farama-notifications>=0.0.1
-  - ale-py>=0.9 ; extra == 'atari'
-  - box2d==2.3.10 ; extra == 'box2d'
-  - pygame-ce>=2.1.3 ; extra == 'box2d'
-  - swig==4.* ; extra == 'box2d'
-  - pygame-ce>=2.1.3 ; extra == 'classic-control'
-  - pygame-ce>=2.1.3 ; extra == 'classic-control'
-  - mujoco>=2.1.5 ; extra == 'mujoco'
-  - imageio>=2.14.1 ; extra == 'mujoco'
-  - packaging>=23.0 ; extra == 'mujoco'
-  - pygame-ce>=2.1.3 ; extra == 'toy-text'
-  - pygame-ce>=2.1.3 ; extra == 'toy-text'
-  - jax>=0.4.16 ; extra == 'jax'
-  - jaxlib>=0.4.16 ; extra == 'jax'
-  - flax>=0.5.0 ; extra == 'jax'
-  - array-api-compat>=1.11.0 ; extra == 'jax'
-  - numpy>=2.1 ; extra == 'jax'
-  - torch>=1.13.0 ; extra == 'torch'
-  - array-api-compat>=1.11.0 ; extra == 'torch'
-  - numpy>=2.1 ; extra == 'torch'
-  - array-api-compat>=1.11.0 ; extra == 'array-api'
-  - numpy>=2.1 ; extra == 'array-api'
-  - packaging>=23.0 ; extra == 'array-api'
-  - moviepy>=1.0.0 ; extra == 'other'
-  - matplotlib>=3.0 ; extra == 'other'
-  - opencv-python>=3.0 ; extra == 'other'
-  - seaborn>=0.13 ; extra == 'other'
-  - ale-py>=0.9 ; extra == 'all'
-  - box2d-py==2.3.5 ; extra == 'all'
-  - pygame-ce>=2.1.3 ; extra == 'all'
-  - swig==4.* ; extra == 'all'
-  - pygame-ce>=2.1.3 ; extra == 'all'
-  - mujoco>=2.1.5 ; extra == 'all'
-  - imageio>=2.14.1 ; extra == 'all'
-  - packaging>=23.0 ; extra == 'all'
-  - pygame-ce>=2.1.3 ; extra == 'all'
-  - jax>=0.4.16 ; extra == 'all'
-  - jaxlib>=0.4.16 ; extra == 'all'
-  - flax>=0.5.0 ; extra == 'all'
-  - array-api-compat>=1.11.0 ; extra == 'all'
-  - numpy>=2.1 ; extra == 'all'
-  - torch>=1.13.0 ; extra == 'all'
-  - array-api-compat>=1.11.0 ; extra == 'all'
-  - numpy>=2.1 ; extra == 'all'
-  - array-api-compat>=1.11.0 ; extra == 'all'
-  - numpy>=2.1 ; extra == 'all'
-  - opencv-python>=3.0 ; extra == 'all'
-  - matplotlib>=3.0 ; extra == 'all'
-  - moviepy>=1.0.0 ; extra == 'all'
-  - pytest>=7.1.3 ; extra == 'testing'
-  - scipy>=1.7.3 ; extra == 'testing'
-  - dill>=0.3.7 ; extra == 'testing'
-  - array-api-extra>=0.7.0 ; extra == 'testing'
   requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/eb/4b/3c7e373d81219ee7493c1581c85a926c413ddeb3794cff87a37023a337e4/jaxlib-0.8.1-cp312-cp312-manylinux_2_27_x86_64.whl
   name: jaxlib
