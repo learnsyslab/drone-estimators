@@ -51,6 +51,9 @@ class ROSConnector:
     * Full state estimation including velocity, angular velocity, and disturbance forces from an
       estimator node.
 
+    The raw `/tf` poses of all tracked objects, including the estimated ones, are additionally
+    available through `pos_raw` and `quat_raw`.
+
     Data is accessed through property methods that convert the shared memory arrays into
     dictionaries keyed by object names.
 
@@ -83,8 +86,9 @@ class ROSConnector:
         Args:
             tf_names: Names of objects to track using only pose data from `/tf` topic. If None,
                 nothing will be tracked.
-            estimator_names: Names of objects to track with full state estimation. If None, nothing
-                will be tracked.
+            estimator_names: Names of objects to track with full state estimation. Their raw poses
+                from `/tf` are available in `pos_raw` and `quat_raw`. If None, nothing will be
+                tracked.
             cmd_topic: Topic name for publishing commands. If None, command publishing is disabled.
             timeout: If greater than 0, wait for position updates of all tracked objects before
                 returning.
@@ -113,6 +117,8 @@ class ROSConnector:
         ctx = mp.get_context("spawn")
         self._pos = ctx.Array("f", [float("nan")] * len(self.names) * 3)
         self._quat = ctx.Array("f", [float("nan")] * len(self.names) * 4)
+        self._pos_raw = ctx.Array("f", [float("nan")] * len(self.names) * 3)
+        self._quat_raw = ctx.Array("f", [float("nan")] * len(self.names) * 4)
         self._vel = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 3)
         self._ang_vel = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 3)
         self._disturbance = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 6)
@@ -123,10 +129,19 @@ class ROSConnector:
         self.shutdown = ctx.Event()
         atexit.register(lambda: self.shutdown.set())  # Ensure processes are killed on exit
         self.processes = []
-        if self.tf_names:  # Create a process for the /tf callback
+        if self.names:  # Create a process for the /tf callback
             tf_process = ctx.Process(
                 target=tf_update,
-                args=(self.tf_names, self._pos, self._quat, self._times, self.shutdown),
+                args=(
+                    self.names,
+                    self.tf_names,
+                    self._pos,
+                    self._quat,
+                    self._pos_raw,
+                    self._quat_raw,
+                    self._times,
+                    self.shutdown,
+                ),
             )
             self.processes.append(tf_process)
 
@@ -169,9 +184,10 @@ class ROSConnector:
                 time.sleep(0.01)  # Processes are spinning, so we can sleep here
             else:
                 self.shutdown.set()
-                missing_objects = [name for name, pos in self.pos.items() if np.any(np.isnan(pos))]
-                tf_objects = [n for n in missing_objects if n in self.tf_names]
-                estimator_objects = [n for n in missing_objects if n in self.estimator_names]
+                tf_objects = [n for n, pos in self.pos_raw.items() if np.any(np.isnan(pos))]
+                estimator_objects = [
+                    n for n in self.estimator_names if np.any(np.isnan(self.pos[n]))
+                ]
                 missing_msg = ""
                 if any(tf_objects):
                     missing_msg += (
@@ -196,6 +212,18 @@ class ROSConnector:
     def quat(self) -> dict[str, NDArray]:
         """The latest orientation data for all tracked objects."""
         quat = np.asarray(self._quat, dtype=np.float32).reshape(-1, 4)
+        return {n: quat[i] for i, n in enumerate(self.names)}
+
+    @property
+    def pos_raw(self) -> dict[str, NDArray]:
+        """The latest raw position data from `/tf` for all tracked objects."""
+        pos = np.asarray(self._pos_raw, dtype=np.float32).reshape(-1, 3)
+        return {n: pos[i] for i, n in enumerate(self.names)}
+
+    @property
+    def quat_raw(self) -> dict[str, NDArray]:
+        """The latest raw orientation data from `/tf` for all tracked objects."""
+        quat = np.asarray(self._quat_raw, dtype=np.float32).reshape(-1, 4)
         return {n: quat[i] for i, n in enumerate(self.names)}
 
     @property
@@ -226,14 +254,14 @@ class ROSConnector:
     def times(self) -> dict[str, np.float32]:
         """The times of the last received data for all tracked objects."""
         times = np.asarray(self._times, dtype=np.float64).reshape(-1)
-        return {n: times[i] for i, n in enumerate(self.estimator_names)}
+        return {n: times[i] for i, n in enumerate(self.names)}
 
     @property
     def is_outdated(self) -> dict[str, np.bool]:
-        """The latest estimated forces data for all tracked objects."""
+        """Whether the latest data of each tracked object is older than `outdated_after`."""
         times = np.asarray(self._times, dtype=np.float64).reshape(-1)
         is_outdated = times < time.time() - self._outdated_after
-        return {n: is_outdated[i] for i, n in enumerate(self.estimator_names)}
+        return {n: is_outdated[i] for i, n in enumerate(self.names)}
 
     @property
     def active(self) -> bool:
@@ -241,9 +269,12 @@ class ROSConnector:
         # Check if drone is being tracked and if drone has already received updates
         pos_ready = not np.any(np.isnan(np.array(self._pos, dtype=np.float32)))
         quat_ready = not np.any(np.isnan(np.array(self._quat, dtype=np.float32)))
+        pos_raw_ready = not np.any(np.isnan(np.array(self._pos_raw, dtype=np.float32)))
+        quat_raw_ready = not np.any(np.isnan(np.array(self._quat_raw, dtype=np.float32)))
         vel_ready = not np.any(np.isnan(np.array(self._vel, dtype=np.float32)))
         ang_vel_ready = not np.any(np.isnan(np.array(self._ang_vel, dtype=np.float32)))
-        return pos_ready and quat_ready and vel_ready and ang_vel_ready
+        raw_ready = pos_raw_ready and quat_raw_ready
+        return pos_ready and quat_ready and raw_ready and vel_ready and ang_vel_ready
 
     def publish_cmd(self, value: NDArray):
         """Publish a command to ROS.
@@ -269,23 +300,38 @@ class ROSConnector:
 
 def tf_update(
     names: list[str],
+    tf_names: list[str],
     pos: list[SynchronizedArray],
     quat: list[SynchronizedArray],
+    pos_raw: list[SynchronizedArray],
+    quat_raw: list[SynchronizedArray],
     times: list[Synchronized],
     shutdown: Event,
 ):
     """Update the shared memory arrays with the latest position and orientation data from /tf.
 
     Args:
-        names: The names of the objects to track.
+        names: The names of all objects to track.
+        tf_names: The names of the objects only tracked with /tf. Must be the first entries of names.
         pos: The shared memory arrays for the position data.
         quat: The shared memory arrays for the orientation data.
+        pos_raw: The shared memory arrays for the raw position data of all objects.
+        quat_raw: The shared memory arrays for the raw orientation data of all objects.
         times: The shared memory arrays for the time data.
         shutdown: The event to signal shutdown.
     """
     rclpy.init()
     node = rclpy.create_node("tf_updater_" + uuid4().hex)
-    fn = partial(tf_callback, names=names, pos=pos, quat=quat, times=times)
+    fn = partial(
+        tf_callback,
+        names=names,
+        tf_names=tf_names,
+        pos=pos,
+        quat=quat,
+        pos_raw=pos_raw,
+        quat_raw=quat_raw,
+        times=times,
+    )
     sub = node.create_subscription(TFMessage, "/tf", fn, 10)
     while not shutdown.is_set():
         rclpy.spin_once(node, timeout_sec=0.1)
@@ -387,17 +433,26 @@ def command_publisher(queue: mp.Queue, cmd_topic: str, shutdown: Event):
 def tf_callback(
     data: TFMessage,
     names: list[str],
+    tf_names: list[str],
     pos: SynchronizedArray,
     quat: SynchronizedArray,
+    pos_raw: SynchronizedArray,
+    quat_raw: SynchronizedArray,
     times: SynchronizedArray,
 ):
     """Save the pose data from the /tf topic into shared memory arrays.
 
+    Raw poses are saved for all objects. Objects only tracked with /tf also get their pose and time
+    updated, the other objects get those from the estimator.
+
     Args:
         data: The TFMessage message.
-        names: The names of the objects to track.
+        names: The names of all objects to track.
+        tf_names: The names of the objects only tracked with /tf. Must be the first entries of names.
         pos: The shared memory array for the position values.
         quat: The shared memory array for the orientation values.
+        pos_raw: The shared memory array for the raw position values.
+        quat_raw: The shared memory array for the raw orientation values.
         times: The shared memory array for the time values.
     """
     for tf in data.transforms:
@@ -405,9 +460,12 @@ def tf_callback(
         if name in names:
             T, Rot = tf.transform.translation, tf.transform.rotation
             idx = names.index(name)
-            pos[idx * 3 : (idx + 1) * 3] = [T.x, T.y, T.z]
-            quat[idx * 4 : (idx + 1) * 4] = [Rot.x, Rot.y, Rot.z, Rot.w]
-            times[idx] = time.time()
+            pos_raw[idx * 3 : (idx + 1) * 3] = [T.x, T.y, T.z]
+            quat_raw[idx * 4 : (idx + 1) * 4] = [Rot.x, Rot.y, Rot.z, Rot.w]
+            if name in tf_names:
+                pos[idx * 3 : (idx + 1) * 3] = [T.x, T.y, T.z]
+                quat[idx * 4 : (idx + 1) * 4] = [Rot.x, Rot.y, Rot.z, Rot.w]
+                times[idx] = time.time()
 
 
 def pose_callback(
