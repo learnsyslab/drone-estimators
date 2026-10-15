@@ -7,5 +7,6 @@
 /build
 /dist
 /ros_ws
+/site
 
 .pixi
