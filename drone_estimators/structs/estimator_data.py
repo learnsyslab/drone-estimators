@@ -1,18 +1,18 @@
-"""TODO."""
+"""Data shared by all estimators."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 import numpy as np
-from flax.struct import Callable, dataclass
+from flax.struct import dataclass
 
 if TYPE_CHECKING:
     from drone_estimators._typing import Array  # To be changed to array_api_typing later
 
 
 @dataclass
-class UKFData:
+class EstimatorData:
     """TODO."""
 
     pos: Array
@@ -39,37 +39,38 @@ class UKFData:
         dist_t: bool = False,
         dim_u: int = 4,
         dim_z: int = 7,
-    ) -> UKFData:
+        batch_shape: tuple[int, ...] = (),
+    ) -> EstimatorData:
         """TODO."""
-        pos = np.zeros(3)
-        quat = np.array([0, 0, 0, 1])
-        vel = np.zeros(3)
-        ang_vel = np.zeros(3)
+        pos = np.zeros((*batch_shape, 3))
+        quat = np.tile([0.0, 0.0, 0.0, 1.0], (*batch_shape, 1))
+        vel = np.zeros((*batch_shape, 3))
+        ang_vel = np.zeros((*batch_shape, 3))
         dim_x = 13
         if rotor_vel:
-            rotor_vel = np.zeros(4)
+            rotor_vel = np.zeros((*batch_shape, 4))
             dim_x = dim_x + 4
         else:
             rotor_vel = None
         if dist_f:
-            dist_f = np.zeros(3)
+            dist_f = np.zeros((*batch_shape, 3))
             dim_x = dim_x + 3
         else:
             dist_f = None
         if dist_t:
-            dist_t = np.zeros(3)
+            dist_t = np.zeros((*batch_shape, 3))
             dim_x = dim_x + 3
         else:
             dist_t = None
 
-        covariance = np.eye(dim_x)
+        covariance = np.tile(np.eye(dim_x), (*batch_shape, 1, 1))
 
-        sigmas_f = np.zeros((2 * dim_x + 1, dim_x))
-        sigmas_h = np.zeros((2 * dim_x + 1, dim_z))
+        sigmas_f = np.zeros((*batch_shape, 2 * dim_x + 1, dim_x))
+        sigmas_h = np.zeros((*batch_shape, 2 * dim_x + 1, dim_z))
 
-        u = np.zeros(dim_u)  # input
-        z = np.zeros(dim_z)  # measurement
-        dt = 1
+        u = np.zeros((*batch_shape, dim_u))  # input
+        z = np.zeros((*batch_shape, dim_z))  # measurement
+        dt = np.ones(batch_shape)
 
         return cls(
             pos,
@@ -97,24 +98,25 @@ class UKFData:
         rotor_vel: Array | None = None,
         dist_f: Array | None = None,
         dist_t: Array | None = None,
-    ) -> UKFData:
+    ) -> EstimatorData:
         """TODO."""
+        batch_shape = pos.shape[:-1]
         dim_x = 13
-        if rotor_vel is None:
+        if rotor_vel is not None:
             dim_x = dim_x + 4
-        if dist_f is None:
+        if dist_f is not None:
             dim_x = dim_x + 3
-        if dist_t is None:
+        if dist_t is not None:
             dim_x = dim_x + 3
 
-        covariance = np.eye(dim_x)
+        covariance = np.tile(np.eye(dim_x), (*batch_shape, 1, 1))
 
-        sigmas_f = np.zeros((2 * dim_x + 1, dim_x))
-        sigmas_h = np.zeros((2 * dim_x + 1, 7))
+        sigmas_f = np.zeros((*batch_shape, 2 * dim_x + 1, dim_x))
+        sigmas_h = np.zeros((*batch_shape, 2 * dim_x + 1, 7))
 
-        u = np.zeros(4)  # input
-        z = np.zeros(7)  # measurement
-        dt = 1
+        u = np.zeros((*batch_shape, 4))  # input
+        z = np.zeros((*batch_shape, 7))  # measurement
+        dt = np.ones(batch_shape)
 
         return cls(
             pos,
@@ -133,7 +135,7 @@ class UKFData:
         )
 
     @classmethod
-    def as_state_array(cls, data: UKFData) -> Array:
+    def as_state_array(cls, data: EstimatorData) -> Array:
         """Returns the state as an array."""
         xp = data.pos.__array_namespace__()
         x = xp.concat((data.pos, data.quat, data.vel, data.ang_vel), axis=-1)
@@ -146,7 +148,7 @@ class UKFData:
         return x
 
     @classmethod
-    def from_state_array(cls, data: UKFData, array: Array) -> UKFData:
+    def from_state_array(cls, data: EstimatorData, array: Array) -> EstimatorData:
         """Updates data in the given structure based on a given array."""
         pos = array[..., 0:3]
         quat = array[..., 3:7]
@@ -180,7 +182,7 @@ class UKFData:
         )
 
     @classmethod
-    def get_state_dim(cls, data: UKFData) -> int:
+    def get_state_dim(cls, data: EstimatorData) -> int:
         """Returns the dimension of the state."""
         dim_x = 13
         if data.rotor_vel is not None:
@@ -190,59 +192,3 @@ class UKFData:
         if data.dist_t is not None:
             dim_x = dim_x + 3
         return dim_x
-
-
-@dataclass
-class UKFSettings:
-    """TODO."""
-
-    SPsettings: SigmaPointsSettings
-    Q: Array
-    R: Array
-    fx: Callable[
-        [Array, Array, Array, Array, Array, Array, Array | None, Array | None],
-        tuple[Array, Array, Array, Array, Array | None],
-    ]
-    hx: Callable[[Array, Array, Array, Array, Array, Array, Array | None, Array | None], Array]
-
-    @classmethod
-    def create(
-        cls,
-        SPsettings: SigmaPointsSettings,
-        Q: Array,
-        R: Array,
-        fx: Callable[
-            [Array, Array, Array, Array, Array, Array, Array | None, Array | None],
-            tuple[Array, Array, Array, Array, Array | None],
-        ],
-        hx: Callable[[Array, Array, Array, Array, Array, Array, Array | None, Array | None], Array],
-    ) -> UKFSettings:
-        """TODO."""
-        return cls(SPsettings, Q, R, fx, hx)
-
-
-@dataclass
-class SigmaPointsSettings:
-    """TODO."""
-
-    n: int
-    alpha: float
-    beta: float
-    kappa: float
-    lambda_: float
-    Wc: Array
-    Wm: Array
-
-    @classmethod
-    def create(cls, n: int, alpha: float, beta: float, kappa: float = 0.0) -> SigmaPointsSettings:
-        """TODO."""
-        lambda_ = alpha**2 * (n + kappa) - n
-        c = 0.5 / (n + lambda_)
-        Wc0 = np.array([lambda_ / (n + lambda_) + (1 - alpha**2 + beta)])
-        Wm0 = np.array([lambda_ / (n + lambda_)])
-        Wc = np.full(2 * n, c)
-        Wm = np.full(2 * n, c)
-        Wc = np.concat((Wc0, Wc))
-        Wm = np.concat((Wm0, Wm))
-
-        return cls(n, alpha, beta, kappa, lambda_, Wc, Wm)

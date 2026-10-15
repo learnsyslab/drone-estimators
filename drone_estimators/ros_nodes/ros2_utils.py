@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from std_msgs.msg import Header
 
     from drone_estimators._typing import Array  # To be changed to array_api_typing later
-    from drone_estimators.structs import UKFData
+    from drone_estimators.structs.estimator_data import EstimatorData
 
 
 def find_transform(
@@ -241,7 +241,7 @@ def create_marker_array(
     return marker_array
 
 
-def append_state(data: defaultdict[str, list], time: float, state: UKFData):
+def append_state(data: defaultdict[str, list], time: float, state: EstimatorData):
     """Appends each states data to the corresponding of list in the dictionary."""
     data["time"].append(time)
     data["pos"].append(state.pos)
@@ -249,16 +249,17 @@ def append_state(data: defaultdict[str, list], time: float, state: UKFData):
     data["vel"].append(state.vel)
     data["ang_vel"].append(state.ang_vel)
     data["covariance"].append(state.covariance)
-    if state.forces_motor is not None:
-        data["forces_motor"].append(state.forces_motor)
+    # The keys keep their old names, since plot.py and existing recordings use them
+    if state.rotor_vel is not None:
+        data["forces_motor"].append(state.rotor_vel)
     else:
         data["forces_motor"] = []
-    if state.forces_dist is not None:
-        data["forces_dist"].append(state.forces_dist)
+    if state.dist_f is not None:
+        data["forces_dist"].append(state.dist_f)
     else:
         data["forces_dist"] = []
-    if state.torques_dist is not None:
-        data["torques_dist"].append(state.torques_dist)
+    if state.dist_t is not None:
+        data["torques_dist"].append(state.dist_t)
     else:
         data["torques_dist"] = []
 
