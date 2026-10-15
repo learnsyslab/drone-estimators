@@ -50,7 +50,7 @@ pixi install
 pixi shell
 ```
 
-The default environment contains ROS 2 Kilted and installs `drone_estimators` in editable mode. On first activation, it also clones and builds [motion_capture_tracking](https://github.com/utiasDSL/motion_capture_tracking) in `ros_ws/`.
+The default environment contains ROS 2 Kilted and installs `drone_estimators` in editable mode. On first activation, it also clones and builds [motion_capture_tracking](https://github.com/learnsyslab/motion_capture_tracking) in `ros_ws/`.
 
 If you want to have `crazyflow` in editable mode as well, install it into the environment:
 
