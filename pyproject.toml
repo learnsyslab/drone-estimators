@@ -117,6 +117,9 @@ ros-kilted-desktop = "*"
 [tool.pixi.feature.kilted.activation]
 scripts = ["setup_mocap.sh"]
 
+[tool.pixi.feature.kilted.tasks]
+mocap = { cmd = "ros2 launch motion_capture_tracking launch.py", description = "Launch the motion capture tracking node" }
+
 #######################################################################
 ### Pixi Sessions
 #######################################################################
