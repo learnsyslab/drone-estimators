@@ -20,7 +20,7 @@ Start the estimator for a single drone with
 python -m drone_estimators.ros_nodes.ros2_node --drone_name cf1
 ```
 
-The node waits until it has received a first pose of every drone, initializes the estimators with it, and then runs at a fixed frequency. Add `--estimator_type diff` to use the differentiation-based filter instead of the UKF, or `--estimator_type ukf` to force the UKF.
+The node waits until it has received a first pose of every drone, initializes the estimators with it, and then runs at a fixed frequency. Add `--estimator_type diff` to use the differentiation-based filter instead of the UKF, `--estimator_type ekf` to use the EKF, or `--estimator_type ukf` to force the UKF.
 
 The settings of the estimators are read from a TOML file. By default, the node uses the [estimators.toml](https://github.com/learnsyslab/drone-estimators/blob/main/drone_estimators/ros_nodes/estimators.toml) that ships with the package:
 

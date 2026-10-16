@@ -16,7 +16,7 @@ DIFF_PARAMS = (0.0001, 0.007, 0.09, 0.005, 0.07)  # As in the ROS node
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("estimator_type", ["diff", "ukf"])
+@pytest.mark.parametrize("estimator_type", ["diff", "ukf", "ekf"])
 def test_append_state(estimator_type: str):
     """Tests if the estimates of all estimators can be saved."""
     pos, quat = np.array([0.0, 0.0, 1.0]), np.array([0.0, 0.0, 0.0, 1.0])
@@ -28,6 +28,7 @@ def test_append_state(estimator_type: str):
                 1 / 200,
                 "so_rpy_rotor_drag",
                 "cf21B_500",
+                filter_type=estimator_type.upper(),
                 estimate_rotor_vel=True,
                 estimate_dist_f=True,
             )
