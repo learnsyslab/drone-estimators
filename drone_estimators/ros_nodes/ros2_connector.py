@@ -105,7 +105,6 @@ class ROSConnector:
         assert len(self.estimator_names) == len(set(self.estimator_names)), (
             "Duplicate items in estimator_names"
         )
-        self.names = self.tf_names + self.estimator_names
         assert outdated_after > 0, f"outdated_after needs to be > 0, was {outdated_after}"
         self._outdated_after = outdated_after
         # Create synchronized, shared arrays for all quantities
