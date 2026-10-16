@@ -79,18 +79,15 @@ With `jit=True`, the filter functions are compiled with `jax.jit` on constructio
 
 ## Batching
 
-All estimators support leading batch dimensions, e.g., one estimator for a whole swarm. Pass the `batch_shape` on construction and arrays with a leading batch dimension afterwards. Drones without a new measurement, e.g., because they are occluded, are excluded from the correction with a `mask`. The time step of `predict` can also differ per drone.
+All estimators support leading batch dimensions, e.g., one estimator for a whole swarm. Pass the `batch_shape` on construction and arrays with a leading batch dimension afterwards. Drones without a new measurement, e.g., because they are occluded, are excluded from the correction with a `mask`. The time step of `predict` can also differ per drone. Batching works with NumPy, and can be combined with [JIT compilation](#jit-compilation) for faster estimation loops.
 
 ```python
-import jax
 import numpy as np
-
-jax.config.update("jax_enable_x64", True)
 
 from drone_estimators.estimator_kalman import KalmanFilter
 
 n_drones = 3
-kf = KalmanFilter(1 / 200, "so_rpy", "cf2x_L250", batch_shape=(n_drones,), jit=True)
+kf = KalmanFilter(1 / 200, "so_rpy", "cf2x_L250", batch_shape=(n_drones,))
 kf.set_state(np.zeros((n_drones, 3)), np.tile([0.0, 0.0, 0.0, 1.0], (n_drones, 1)))
 
 pos = np.zeros((n_drones, 3))
