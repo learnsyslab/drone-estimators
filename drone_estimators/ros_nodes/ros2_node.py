@@ -90,12 +90,12 @@ class MPEstimator:
     to keep it simple, we use standard message types.
     """
 
-    def __init__(self, settings: Munch, shutdown: Event | None = None):
+    def __init__(self, settings: Munch, stop_event: Event | None = None):
         """Start the subscriber and publisher processes.
 
         Args:
             settings: The estimator settings, including the names of all drones in the batch.
-            shutdown: Event that stops the estimator and its processes once set. If None, a new
+            stop_event: Event that stops the estimator and its processes once set. If None, a new
                 event is created.
         """
         self.settings = settings
@@ -103,7 +103,7 @@ class MPEstimator:
         n_drones = len(self.drone_names)
 
         ctx = mp.get_context("spawn")
-        self._shutdown = ctx.Event() if shutdown is None else shutdown
+        self._stop_event = ctx.Event() if stop_event is None else stop_event
         self._publish_update = ctx.Event()
         startup = ctx.Barrier(3)  # Main process, _subscriber_loop, _publisher_loop
 
@@ -141,7 +141,7 @@ class MPEstimator:
             self._tf_msg_buffer,
             self._cmd_msg_buffer,
             startup,
-            self._shutdown,
+            self._stop_event,
         )
         self._sub_process = ctx.Process(target=self._subscriber_loop, args=args)
 
@@ -153,7 +153,7 @@ class MPEstimator:
             self._wrench_buffer,
             self._publish_update,
             startup,
-            self._shutdown,
+            self._stop_event,
         )
         self._pub_process = ctx.Process(target=self._publisher_loop, args=args)
 
@@ -219,7 +219,7 @@ class MPEstimator:
         # Initialization, waits until all drones have been measured
         self.logger.info("Waiting for initial measurement.")
         tf_msg_buffer = _view(self._tf_msg_buffer, len(self.drone_names))
-        while not self._shutdown.is_set():
+        while not self._stop_event.is_set():
             with self._tf_msg_buffer.get_lock():
                 data = tf_msg_buffer.copy()
                 tf_msg_buffer[:, 0] = 0
@@ -255,7 +255,7 @@ class MPEstimator:
         try:
             # self.logger.info(f"{self.estimator.data.pos=}")
             # Estimation loop
-            while not self._shutdown.is_set():
+            while not self._stop_event.is_set():
                 loop_start_time = time.time()
 
                 with self._tf_msg_buffer.get_lock():
@@ -361,7 +361,7 @@ class MPEstimator:
                 if remaining > 0:
                     time.sleep(remaining)
         except KeyboardInterrupt:
-            self._shutdown.set()
+            self._stop_event.set()
 
     @staticmethod
     def _subscriber_loop(
@@ -369,7 +369,7 @@ class MPEstimator:
         _tf_msg_buffer: SynchronizedArray,
         _cmd_msg_buffer: SynchronizedArray,
         startup: Barrier,
-        shutdown: Event,
+        stop_event: Event,
     ):
         rclpy.init()
         node = rclpy.create_node("estimator_sub_" + "_".join(drone_names))
@@ -378,7 +378,7 @@ class MPEstimator:
             history=QoSHistoryPolicy.KEEP_LAST,
             depth=1,
         )
-        signal.signal(signal.SIGINT, lambda c, _: shutdown.set())  # Gracefully handle Ctrl-C
+        signal.signal(signal.SIGINT, lambda c, _: stop_event.set())  # Gracefully handle Ctrl-C
 
         tf_msg_buffer = _view(_tf_msg_buffer, len(drone_names))
         cmd_msg_buffer = _view(_cmd_msg_buffer, len(drone_names))
@@ -468,7 +468,7 @@ class MPEstimator:
             subs += [sub_cmd, sub_calib, sub_remove_calib]
         startup.wait(10.0)  # Register this process as ready for startup barrier
 
-        while not shutdown.is_set():
+        while not stop_event.is_set():
             rclpy.spin_once(node, timeout_sec=0.1)
         sub_tf.destroy()
         for sub in subs:
@@ -484,7 +484,7 @@ class MPEstimator:
         wrench_buffer: SynchronizedArray,
         update: Event,
         startup: Barrier,
-        shutdown: Event,
+        stop_event: Event,
     ):
         rclpy.init()
         node = rclpy.create_node("estimator_pub_" + "_".join(drone_names))
@@ -523,11 +523,11 @@ class MPEstimator:
             pubs_rotor_vel.append(pub_rotor_vel)
             pubs_wrench.append(pub_wrench)
             pubs_markers.append(pub_markers)
-        signal.signal(signal.SIGINT, lambda c, _: shutdown.set())  # Gracefully handle Ctrl-C
+        signal.signal(signal.SIGINT, lambda c, _: stop_event.set())  # Gracefully handle Ctrl-C
         startup.wait(10.0)  # Register this process as ready for startup barrier
 
         # TODO clear arrays???
-        while not shutdown.is_set():
+        while not stop_event.is_set():
             if not update.wait(0.5):
                 continue
             time_stamp = time.time()
@@ -578,7 +578,7 @@ class MPEstimator:
     def close(self):
         """TODO."""
         self.logger.info(f"Estimator {self.drone_names} shutdown")
-        self._shutdown.set()
+        self._stop_event.set()
         self._sub_process.join()
         self._pub_process.join()
 
@@ -600,7 +600,7 @@ def launch_estimators(estimators: dict):
     processes = []
     seen_drone_names = []
     ctx = mp.get_context("spawn")
-    shutdown = ctx.Event()
+    stop_event = ctx.Event()
 
     # Estimators with identical settings (except for the drone name) are run as one batch
     batches = {}
@@ -618,7 +618,7 @@ def launch_estimators(estimators: dict):
     try:
         for settings in batches.values():
             # not sure if daemon should be True or False
-            p = ctx.Process(target=launch_node, args=(settings, shutdown))
+            p = ctx.Process(target=launch_node, args=(settings, stop_event))
             processes.append(p)
             p.start()
 
@@ -629,7 +629,7 @@ def launch_estimators(estimators: dict):
             print("\nKeyboard interrupt received. Terminating nodes...")
 
     finally:
-        shutdown.set()
+        stop_event.set()
 
         for p in processes:
             p.join(timeout=2)
@@ -648,7 +648,7 @@ def launch_estimators(estimators: dict):
 def launch_node(settings: Munch, stop_event: Event):
     """TODO."""
     rclpy.init()
-    estimator = MPEstimator(settings, shutdown=stop_event)
+    estimator = MPEstimator(settings, stop_event=stop_event)
     try:
         estimator.run()
     finally:
