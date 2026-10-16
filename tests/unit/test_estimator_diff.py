@@ -1,4 +1,4 @@
-"""Unit tests of the legacy estimator."""
+"""Unit tests of the differentiation-based filter."""
 
 from __future__ import annotations
 
@@ -8,20 +8,15 @@ import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation as R
 
-from drone_estimators.estimator_legacy import (
-    LegacyData,
-    LegacySettings,
-    StateEstimator,
-    legacy_correct,
-)
+from drone_estimators.estimator_diff import DiffData, DiffFilter, DiffSettings, diff_correct
 
-LEGACY_PARAMS = (0.0001, 0.007, 0.09, 0.005, 0.07)  # As in the ROS node
+DIFF_PARAMS = (0.0001, 0.007, 0.09, 0.005, 0.07)  # As in the ROS node
 
 
 @pytest.mark.unit
-def test_legacy_jit():
-    """Tests if the legacy estimator can be jitted and matches the non-jitted version."""
-    settings = LegacySettings(*LEGACY_PARAMS)
+def test_diff_jit():
+    """Tests if the filter can be jitted and matches the non-jitted version."""
+    settings = DiffSettings(*DIFF_PARAMS)
     dt = 1 / 200
     t = np.arange(1, 101) * dt
     pos = np.stack([np.sin(t), np.cos(t), t], axis=-1)
@@ -29,12 +24,12 @@ def test_legacy_jit():
     quat[::3] *= -1  # Same rotation, other hemisphere
     pos[50], quat[50] = pos[49], quat[49]  # Repeated measurement
     with jax.enable_x64(True):
-        correct_jit = jax.jit(legacy_correct)
-        data_np = LegacyData.create_empty()
+        correct_jit = jax.jit(diff_correct)
+        data_np = DiffData.create_empty()
         data_jit = jax.tree.map(jnp.asarray, data_np)
         for k in range(len(t)):
             step_dt = 0.0 if k == 70 else dt  # Correction without time passing
-            data_np = legacy_correct(data_np, settings, pos[k], quat[k], step_dt)
+            data_np = diff_correct(data_np, settings, pos[k], quat[k], step_dt)
             data_jit = correct_jit(data_jit, settings, pos[k], quat[k], np.float64(step_dt))
         for x_np, x_jit in zip(jax.tree.leaves(data_np), jax.tree.leaves(data_jit)):
             assert x_jit.dtype == jnp.float64
@@ -43,12 +38,12 @@ def test_legacy_jit():
 
 
 @pytest.mark.unit
-def test_legacy_startup():
+def test_diff_startup():
     """Tests that the first measurement after initialization does not cause a velocity spike."""
     pos = np.array([0.3, -0.5, 1.0])
     quat = R.from_euler("z", 1.0).as_quat()
     with jax.enable_x64(True):
-        estimator = StateEstimator(LEGACY_PARAMS)
+        estimator = DiffFilter(DIFF_PARAMS)
         estimator.set_state(pos, quat)
         estimator.predict(1 / 100)
         data = estimator.correct(pos, -quat)  # Same rotation, other hemisphere
@@ -59,7 +54,7 @@ def test_legacy_startup():
 
 
 @pytest.mark.unit
-def test_legacy_quat_sign():
+def test_diff_quat_sign():
     """Tests that the sign of the measured quaternions does not change the estimate."""
     t = np.arange(100) / 200
     quat = R.from_rotvec(np.outer(t, [1.0, 2.0, 3.0])).as_quat()
@@ -67,7 +62,7 @@ def test_legacy_quat_sign():
     estimates = []
     with jax.enable_x64(True):
         for q in (quat, quat * signs):
-            estimator = StateEstimator(LEGACY_PARAMS)
+            estimator = DiffFilter(DIFF_PARAMS)
             estimator.set_state(np.zeros(3), q[0])
             for k in range(1, 100):
                 estimator.predict(1 / 200)
@@ -79,14 +74,14 @@ def test_legacy_quat_sign():
 
 
 @pytest.mark.unit
-def test_legacy_body_rates():
+def test_diff_body_rates():
     """Tests that the estimated angular velocity is in body coordinates."""
     ang_vel = np.array([1.0, -2.0, 3.0])
     t = np.arange(400) / 200
     rot0 = R.from_euler("xyz", [0.3, -0.5, 1.0])
     quat = (rot0 * R.from_rotvec(np.outer(t, ang_vel))).as_quat()
     with jax.enable_x64(True):
-        estimator = StateEstimator(LEGACY_PARAMS)
+        estimator = DiffFilter(DIFF_PARAMS)
         estimator.set_state(np.zeros(3), quat[0])
         for k in range(1, len(t)):
             estimator.predict(1 / 200)
@@ -96,15 +91,15 @@ def test_legacy_body_rates():
 
 
 @pytest.mark.unit
-def test_legacy_needs_x64():
-    """Tests that the legacy estimator refuses to run in 32 bit."""
+def test_diff_needs_x64():
+    """Tests that the differentiation-based filter refuses to run in 32 bit."""
     with jax.enable_x64(False), pytest.raises(RuntimeError):
-        StateEstimator(LEGACY_PARAMS)
+        DiffFilter(DIFF_PARAMS)
 
 
 @pytest.mark.unit
 @pytest.mark.parametrize("jit", [False, True])
-def test_legacy_batched(jit: bool):
+def test_diff_batched(jit: bool):
     """Tests that a batched estimator matches one estimator per drone.
 
     Not every drone gets a measurement in every step, which is handled by the mask.
@@ -116,9 +111,9 @@ def test_legacy_batched(jit: bool):
     quat = R.from_rotvec(rng.normal(size=(n_drones, 1, 3)) * t[:, None]).as_quat()
     has_meas = rng.random((n_steps, n_drones)) < 0.7
     with jax.enable_x64(True):
-        batched = StateEstimator(LEGACY_PARAMS, batch_shape=(n_drones,), jit=jit)
+        batched = DiffFilter(DIFF_PARAMS, batch_shape=(n_drones,), jit=jit)
         batched.set_state(pos[:, 0], quat[:, 0])
-        single = [StateEstimator(LEGACY_PARAMS) for _ in range(n_drones)]
+        single = [DiffFilter(DIFF_PARAMS) for _ in range(n_drones)]
         for i, estimator in enumerate(single):
             estimator.set_state(pos[i, 0], quat[i, 0])
         for k in range(1, n_steps):

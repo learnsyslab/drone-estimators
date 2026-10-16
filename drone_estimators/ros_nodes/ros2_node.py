@@ -48,8 +48,8 @@ from std_srvs.srv import Trigger
 from tf2_msgs.msg import TFMessage
 from visualization_msgs.msg import MarkerArray
 
+from drone_estimators.estimator_diff import DiffFilter
 from drone_estimators.estimator_kalman import KalmanFilter
-from drone_estimators.estimator_legacy import StateEstimator
 from drone_estimators.ros_nodes.ros2_utils import (
     append_measurement,
     append_state,
@@ -177,8 +177,8 @@ class MPEstimator:
 
         batch_shape, jit = (len(self.drone_names),), self.settings.jit_compile
         match self.settings.estimator_type:
-            case "legacy":
-                self.estimator = StateEstimator(
+            case "diff":
+                self.estimator = DiffFilter(
                     (0.0001, 0.007, 0.09, 0.005, 0.07), batch_shape=batch_shape, jit=jit
                 )
                 if (
@@ -187,7 +187,8 @@ class MPEstimator:
                     or self.settings.estimate_dist_t
                 ):
                     self.logger.warning(
-                        "Legacy estimator does not support force or torque estimation!"
+                        "The differentiation-based filter does not support force or torque "
+                        "estimation!"
                     )
             case "ukf":
                 self.input_needed = True
@@ -580,7 +581,7 @@ class MPEstimator:
             for i, drone_name in enumerate(self.drone_names):
                 filename = f"data_{drone_name}_"
                 info = f"{self.settings.estimator_type}"
-                if self.settings.estimator_type != "legacy":
+                if self.settings.estimator_type != "diff":
                     info = info + f"_{self.settings.dynamics_model}"
                 with open(filename + info + ".pkl", "wb") as f:
                     pickle.dump(self.data_est[i], f)
@@ -656,7 +657,7 @@ if __name__ == "__main__":
     parser.add_argument("--settings", default=None, help="Path to settings file in CWD")
     parser.add_argument("--drone_name", default=None, help="Overwrite drone_name in estimator1")
     parser.add_argument(
-        "--legacy", action="store_true", help="Overwrite estimator type in estimator1"
+        "--estimator_type", choices=["diff", "ukf"], help="Overwrite estimator type in estimator1"
     )
     args = parser.parse_args()
 
@@ -668,8 +669,8 @@ if __name__ == "__main__":
         estimators = munchify(toml.load(f))
     if args.drone_name is not None:
         estimators.estimator1.drone_name = args.drone_name  # overwrite drone_name
-    if args.legacy:
-        estimators.estimator1.estimator_type = "legacy"  # overwrite estimator type
+    if args.estimator_type is not None:
+        estimators.estimator1.estimator_type = args.estimator_type  # overwrite estimator type
 
     # Add debug to each estimator (if not already in place)
     for key, val in estimators.items():

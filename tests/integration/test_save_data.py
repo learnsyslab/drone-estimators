@@ -8,21 +8,21 @@ import jax
 import numpy as np
 import pytest
 
+from drone_estimators.estimator_diff import DiffFilter
 from drone_estimators.estimator_kalman import KalmanFilter
-from drone_estimators.estimator_legacy import StateEstimator
 from drone_estimators.ros_nodes.ros2_utils import append_state
 
-LEGACY_PARAMS = (0.0001, 0.007, 0.09, 0.005, 0.07)  # As in the ROS node
+DIFF_PARAMS = (0.0001, 0.007, 0.09, 0.005, 0.07)  # As in the ROS node
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("estimator_type", ["legacy", "ukf"])
+@pytest.mark.parametrize("estimator_type", ["diff", "ukf"])
 def test_append_state(estimator_type: str):
     """Tests if the estimates of all estimators can be saved."""
     pos, quat = np.array([0.0, 0.0, 1.0]), np.array([0.0, 0.0, 0.0, 1.0])
     with jax.enable_x64(True):
-        if estimator_type == "legacy":
-            estimator = StateEstimator(LEGACY_PARAMS)
+        if estimator_type == "diff":
+            estimator = DiffFilter(DIFF_PARAMS)
         else:
             estimator = KalmanFilter(
                 1 / 200,
@@ -37,6 +37,6 @@ def test_append_state(estimator_type: str):
             append_state(data, 0.0, estimator.predict(1 / 200))
             append_state(data, 0.0, estimator.correct(pos, quat))
     assert len(data["pos"]) == len(data["covariance"]) == 6
-    expected = 0 if estimator_type == "legacy" else 6
+    expected = 0 if estimator_type == "diff" else 6
     assert len(data["forces_motor"]) == len(data["forces_dist"]) == expected
     assert len(data["torques_dist"]) == 0

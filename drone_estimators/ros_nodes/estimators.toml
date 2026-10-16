@@ -1,6 +1,6 @@
 # Simply add your estimators as shown below
 
-# Supported types: legacy, ukf, TODO implement EKF
+# Supported types: diff, ukf, TODO implement EKF
 # Supported models and drone configs: See crazyflow.dynamics.Dynamics and crazyflow.drones.Drone
 
 [global] # global settings, can be overwritten by each estimator
