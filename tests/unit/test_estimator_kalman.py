@@ -11,4 +11,4 @@ from drone_estimators.estimator_kalman import KalmanFilter
 def test_kalman_filter_type():
     """Tests that only implemented filter types are accepted."""
     with pytest.raises(AssertionError):
-        KalmanFilter(1 / 200, filter_type="EKF")
+        KalmanFilter(1 / 200, filter_type="PF")

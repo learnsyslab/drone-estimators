@@ -11,6 +11,7 @@ from scipy.spatial.transform import Rotation as R
 from drone_estimators.estimator_kalman import KalmanFilter
 from drone_estimators.structs.estimator_data import EstimatorData
 from drone_estimators.utils.dynamics import dynamics_function
+from drone_estimators.utils.integration import integrate_EstimatorData
 
 # All dynamics with every drone they have parameters for
 DYNAMICS_DRONES = [(d, drone) for d in available_dynamics for drone in supported_drones(d)]
@@ -20,11 +21,14 @@ DYNAMICS_DRONES = [(d, drone) for d in available_dynamics for drone in supported
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize("filter_type", ["UKF", "EKF"])
 @pytest.mark.parametrize("dynamics, drone", DYNAMICS_DRONES)
-def test_kalman(dynamics: str, drone: str):
+def test_kalman(dynamics: str, drone: str, filter_type: str):
     """Tests if the Kalman filter can be imported and stepped."""
     supports_dynamics = dynamics_features(dynamics_function(dynamics, drone))["rotor_dynamics"]
-    kf = KalmanFilter(1 / 200, dynamics, drone, estimate_rotor_vel=supports_dynamics)
+    kf = KalmanFilter(
+        1 / 200, dynamics, drone, filter_type=filter_type, estimate_rotor_vel=supports_dynamics
+    )
 
     kf.predict(1 / 240, np.array([0.0, 0.0, 0.0, 0.5]))
 
@@ -32,14 +36,15 @@ def test_kalman(dynamics: str, drone: str):
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize("filter_type", ["UKF", "EKF"])
 @pytest.mark.parametrize("jit", [False, True])
-def test_kalman_batched(jit: bool):
+def test_kalman_batched(jit: bool, filter_type: str):
     """Tests that a batched Kalman filter matches one (numpy) filter per drone.
 
     The drones have different time steps and not every drone gets a measurement in every step.
     """
     n_drones, n_steps = 3, 40
-    kwargs = dict(estimate_rotor_vel=True, estimate_dist_f=True)
+    kwargs = dict(filter_type=filter_type, estimate_rotor_vel=True, estimate_dist_f=True)
     rng = np.random.default_rng(0)
     t = np.arange(n_steps)[:, None] / 200
     pos = rng.normal(size=(n_drones, 1, 3)) + 0.01 * np.sin(5 * t)
@@ -71,3 +76,44 @@ def test_kalman_batched(jit: bool):
         # The UKF amplifies floating point differences (e.g. from XLA), so we compare to the scale
         assert np.allclose(x, x_single, rtol=0, atol=1e-5 * np.max(np.abs(x_single)))
         assert np.allclose(P, P_single, rtol=0, atol=1e-5 * np.max(np.abs(P_single)))
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("filter_type", ["UKF", "EKF"])
+def test_kalman_tracking(filter_type: str):
+    """Tests that the Kalman filter tracks a drone flying with the same dynamics.
+
+    The drone tilts back and forth and is pushed by a constant disturbance force.
+    """
+    model, drone, dt, n_steps = "so_rpy_rotor_drag", "cf21B_500", 1 / 200, 600
+    fx = dynamics_function(model, drone)
+    t, zeros = np.arange(n_steps) * dt, np.zeros(n_steps)
+    cmd = np.stack((0.15 * np.sin(2 * t), 0.1 * np.sin(3 * t + 1), zeros, zeros + 0.44), -1)
+    dist_f = np.array([0.02, -0.01, 0.0])
+    pos, quat = np.zeros(3), np.array([0.0, 0.0, 0.0, 1.0])
+    state = EstimatorData.create(pos, quat, np.zeros(3), np.zeros(3), np.full(4, 0.44), dist_f)
+    state = state.replace(dt=np.asarray(dt))
+    with jax.enable_x64(True):
+        kf = KalmanFilter(
+            dt, model, drone, filter_type=filter_type, estimate_rotor_vel=True, estimate_dist_f=True
+        )
+        kf.set_state(pos, quat)
+        for k in range(n_steps):
+            pos_dot, quat_dot, vel_dot, ang_vel_dot, rotor_vel_dot = fx(
+                state.pos, state.quat, state.vel, state.ang_vel, cmd[k], state.rotor_vel, dist_f
+            )
+            state_dot = state.replace(
+                pos=pos_dot,
+                quat=quat_dot,
+                vel=vel_dot,
+                ang_vel=ang_vel_dot,
+                rotor_vel=rotor_vel_dot,
+            )
+            state = integrate_EstimatorData(state, state_dot)
+            kf.predict(dt, cmd[k])
+            estimate = kf.correct(state.pos, state.quat)
+    assert np.max(np.abs(state.vel)) > 0.3, "The drone should move"
+    assert np.allclose(estimate.pos, state.pos, atol=1e-4)
+    assert np.allclose(estimate.vel, state.vel, atol=1e-3)
+    assert np.allclose(estimate.ang_vel, state.ang_vel, atol=1e-3)
+    assert np.allclose(estimate.dist_f, dist_f, atol=1e-3)

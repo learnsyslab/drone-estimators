@@ -12,27 +12,31 @@ import numpy as np
 from drone_estimators.estimator import Estimator
 from drone_estimators.filterpy import (
     Q_discrete_white_noise,
+    ekf_correct,
+    ekf_predict,
+    ekf_predict_correct,
     ukf_correct,
     ukf_predict,
     ukf_predict_correct,
 )
+from drone_estimators.structs.ekf_data import EKFSettings
 from drone_estimators.structs.estimator_data import EstimatorData
 from drone_estimators.structs.ukf_data import SigmaPointsSettings, UKFSettings
-from drone_estimators.utils.dynamics import dynamics_function, observation_function
+from drone_estimators.utils.dynamics import dynamics_function, hover_jacobians, observation_function
 
 if TYPE_CHECKING:
     from drone_estimators._typing import Array  # To be changed to array_api_typing later
 
 
 class KalmanFilter(Estimator):
-    """Unscented Kalman Filter class that wraps the filterPY toolbox."""
+    """Unscented or extended Kalman Filter class that wraps the filterPY toolbox."""
 
     def __init__(
         self,
         dt: float,
         model: str = "so_rpy",
         config: str = "cf2x_L250",
-        filter_type: Literal["UKF"] = "UKF",
+        filter_type: Literal["UKF", "EKF"] = "UKF",
         estimate_rotor_vel: bool = False,
         estimate_dist_f: bool = False,
         estimate_dist_t: bool = False,
@@ -46,7 +50,8 @@ class KalmanFilter(Estimator):
             dt: Time step between callings.
             model: The name of the model that is to be used.
             config: The setup configuration of the drone.
-            filter_type: The type of Kalman filter. Only "UKF" is implemented so far.
+            filter_type: The type of Kalman filter, "UKF" or "EKF". The EKF uses the Jacobian
+                of the dynamics at hover.
             estimate_rotor_vel: If the rotor speeds should be estimated, defaults to False.
             estimate_dist_f: If the disturbance forces should be estimated, defaults to False.
             estimate_dist_t: If the disturbance torques should be estimated, defaults to False.
@@ -54,7 +59,7 @@ class KalmanFilter(Estimator):
             batch_shape: The batch dimensions, e.g., (n_drones,). All arrays have leading batch dimensions.
             jit: If the filter should be jit compiled with jax. Requires 64 bit precision.
         """
-        assert filter_type == "UKF", f"Filter type {filter_type} is not implemented."
+        assert filter_type in ("UKF", "EKF"), f"Filter type {filter_type} is not implemented."
         fx = dynamics_function(model, config)
         hx = observation_function
         # fx = jax.jit(dynamics_numeric(model, config))
@@ -98,12 +103,20 @@ class KalmanFilter(Estimator):
         # )
         # R = self.create_R(dim_z=dim_z, varR_pos=1e-8, varR_quat=3e-6, dt=dt)
 
-        sigma_settings = SigmaPointsSettings.create(n=dim_x, alpha=1e-3, beta=2.0, kappa=0.0)
-        self.settings = UKFSettings.create(SPsettings=sigma_settings, Q=Q, R=R, fx=fx, hx=hx)
+        if filter_type == "UKF":
+            sigma_settings = SigmaPointsSettings.create(n=dim_x, alpha=1e-3, beta=2.0, kappa=0.0)
+            self.settings = UKFSettings.create(SPsettings=sigma_settings, Q=Q, R=R, fx=fx, hx=hx)
+            predict, correct, predict_correct = ukf_predict, ukf_correct, ukf_predict_correct
+        else:
+            A, H = hover_jacobians(
+                model, config, estimate_rotor_vel, estimate_dist_f, estimate_dist_t
+            )
+            self.settings = EKFSettings.create(A=A, H=H, Q=Q, R=R, fx=fx, hx=hx)
+            predict, correct, predict_correct = ekf_predict, ekf_correct, ekf_predict_correct
 
-        self._predict = partial(ukf_predict, settings=self.settings)
-        self._correct = partial(ukf_correct, settings=self.settings)
-        self._predict_correct = partial(ukf_predict_correct, settings=self.settings)
+        self._predict = partial(predict, settings=self.settings)
+        self._correct = partial(correct, settings=self.settings)
+        self._predict_correct = partial(predict_correct, settings=self.settings)
         if jit:
             # The covariances span many orders of magnitude, which 32 bit can't resolve
             if not jax.config.jax_enable_x64:

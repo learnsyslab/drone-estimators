@@ -29,6 +29,7 @@ from drone_estimators.utils.integration import integrate_EstimatorData
 
 if TYPE_CHECKING:
     from drone_estimators._typing import Array  # To be changed to array_api_typing later
+    from drone_estimators.structs.ekf_data import EKFSettings
     from drone_estimators.structs.ukf_data import UKFSettings
 
 
@@ -269,6 +270,88 @@ def ukf_cross_variance(x: Array, z: Array, sigmas_f: Array, sigmas_h: Array, Wc:
     )
     Pxz = xp.sum(Pxz, axis=-3)
     return Pxz
+
+
+def ekf_predict_correct(
+    data: EstimatorData, settings: EKFSettings, mask: Array | None = None
+) -> EstimatorData:
+    """Predict and correct the state. Only batch elements where mask is True are updated."""
+    return ekf_correct(ekf_predict(data, settings, mask), settings, mask)
+
+
+def ekf_predict(
+    data: EstimatorData, settings: EKFSettings, mask: Array | None = None
+) -> EstimatorData:
+    """Predict the state and covariance. Only batch elements where mask is True are updated."""
+    xp = data.pos.__array_namespace__()
+    data_in = data
+    #### Predict
+    # Pass the state through the dynamics
+    pos_dot, quat_dot, vel_dot, ang_vel_dot, rotor_vel_dot = settings.fx(
+        pos=data.pos,
+        quat=data.quat,
+        vel=data.vel,
+        ang_vel=data.ang_vel,
+        cmd=data.u,
+        rotor_vel=data.rotor_vel,
+        dist_f=data.dist_f,
+        dist_t=data.dist_t,
+    )
+    data_dot = data.replace(
+        pos=pos_dot, quat=quat_dot, vel=vel_dot, ang_vel=ang_vel_dot, rotor_vel=rotor_vel_dot
+    )
+
+    # Integrate dynamics if continuous. dt needs a trailing axis to broadcast against the states
+    data_f = integrate_EstimatorData(data.replace(dt=data.dt[..., None]), data_dot)
+    data = data_f.replace(dt=data.dt)
+
+    # Propagate the covariance with the Jacobian of the dynamics, discretized with Euler
+    F = xp.eye(settings.A.shape[-1]) + settings.A * data.dt[..., None, None]
+    P = F @ data.covariance @ F.mT + settings.Q
+
+    # save prior
+    data = data.replace(covariance=P)
+
+    return data if mask is None else select(mask, data, data_in)
+
+
+def ekf_correct(
+    data: EstimatorData, settings: EKFSettings, mask: Array | None = None
+) -> EstimatorData:
+    """Correct the state with the measurement. Only batch elements where mask is True are updated."""
+    xp = data.covariance.__array_namespace__()
+    data_in = data
+    H = settings.H
+    PHT = data.covariance @ H.mT
+
+    # K @ S = PHT => K = PHT @ S^-1 => or: S.T @ K.T = PHT.T
+    S = H @ PHT + settings.R
+    K = xp.linalg.solve(S.mT, PHT.mT).mT  # Kalman gain
+
+    # Pass the state through the measurement function h(x,u) to get the residual
+    zp = settings.hx(
+        pos=data.pos,
+        quat=data.quat,
+        vel=data.vel,
+        ang_vel=data.ang_vel,
+        cmd=data.u,
+        rotor_vel=data.rotor_vel,
+        dist_f=data.dist_f,
+        dist_t=data.dist_t,
+    )
+    y = xp.subtract(data.z, zp)  # residual
+
+    # Update Gaussian state estimate (x, P)
+    x = EstimatorData.as_state_array(data) + (K @ y[..., None])[..., 0]
+    # P = (I-KH)P(I-KH)' + KRK' is more numerically stable than P = (I-KH)P
+    I_KH = xp.eye(H.shape[-1]) - K @ H
+    P = I_KH @ data.covariance @ I_KH.mT + K @ settings.R @ K.mT
+
+    # Save posterior
+    data = EstimatorData.from_state_array(data, x)
+    data = data.replace(covariance=P)
+
+    return data if mask is None else select(mask, data, data_in)
 
 
 def order_by_derivative(Q: Array, dim: int, block_size: int) -> Array:
