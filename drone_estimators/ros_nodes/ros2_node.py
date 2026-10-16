@@ -90,14 +90,20 @@ class MPEstimator:
     to keep it simple, we use standard message types.
     """
 
-    def __init__(self, settings: Munch):
-        """TODO."""
+    def __init__(self, settings: Munch, shutdown: Event | None = None):
+        """Start the subscriber and publisher processes.
+
+        Args:
+            settings: The estimator settings, including the names of all drones in the batch.
+            shutdown: Event that stops the estimator and its processes once set. If None, a new
+                event is created.
+        """
         self.settings = settings
         self.drone_names = settings.drone_names
         n_drones = len(self.drone_names)
 
         ctx = mp.get_context("spawn")
-        self._shutdown = ctx.Event()
+        self._shutdown = ctx.Event() if shutdown is None else shutdown
         self._publish_update = ctx.Event()
         startup = ctx.Barrier(3)  # Main process, _subscriber_loop, _publisher_loop
 
@@ -642,7 +648,7 @@ def launch_estimators(estimators: dict):
 def launch_node(settings: Munch, stop_event: Event):
     """TODO."""
     rclpy.init()
-    estimator = MPEstimator(settings)
+    estimator = MPEstimator(settings, shutdown=stop_event)
     try:
         estimator.run()
     finally:
