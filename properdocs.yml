@@ -6,8 +6,6 @@ repo_name: learnsyslab/drone-estimators
 
 theme:
   name: material
-  logo: img/logo_white.png
-  favicon: img/logo.png
   palette:
     # Palette toggle for automatic mode
     - media: "(prefers-color-scheme)"

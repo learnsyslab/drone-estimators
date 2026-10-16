@@ -1,5 +1,8 @@
 $$
-\hat{\boldsymbol{\mu}}_{k} = \check{\boldsymbol{\mu}}_{k} + \mathbf{K}_{k} \left( \mathbf{y}_{k} - \check{\mathbf{y}}_{k} \right)
+\begin{aligned}
+\hat{\boldsymbol{\mu}}_{x,k+1} &= \check{\boldsymbol{\mu}}_{x,k+1} + \mathbf{K}_{k+1} \mathbf{z}_{k+1} \\
+\hat{\boldsymbol{\Sigma}}_{xx,k+1} &= ( \mathbf{I} - \mathbf{K}_{k+1} \mathbf{C}_{k+1} ) \check{\boldsymbol{\Sigma}}_{xx,k+1}
+\end{aligned}
 $$
 
 Welcome to **Drone Estimators** - a Python package providing state estimators for quadrotor drones. The estimators turn noisy pose measurements, e.g., from a motion capture system, into estimates of the full state: position, orientation, linear and angular velocity, and optionally rotor velocities and disturbance forces and torques.
