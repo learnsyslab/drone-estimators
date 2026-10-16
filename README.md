@@ -78,7 +78,7 @@ estimate = kf.correct(pos=np.array([0.0, 0.0, 0.001]), quat=np.array([0.0, 0.0, 
 print(estimate.pos, estimate.vel, estimate.ang_vel)
 ```
 
-To estimate many drones at once, pass a `batch_shape`. This works with NumPy:
+To estimate many drones at once, pass a `batch_shape`:
 
 ```python
 kf = KalmanFilter(dt=1 / 200, model="so_rpy", config="cf2x_L250", batch_shape=(10,))
