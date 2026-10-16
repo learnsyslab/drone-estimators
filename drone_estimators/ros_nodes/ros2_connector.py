@@ -47,7 +47,7 @@ class ROSConnector:
 
     The class supports two types of tracking:
 
-    * Raw pose tracking from `/tf` topics, available in `pos_raw` and `quat_raw`.
+    * Raw pose tracking from `/tf` topics, available in `pos_raw` and `quat_raw`
     * Full state estimation including velocity, angular velocity, and disturbance forces from an
       estimator node, available in `pos`, `quat`, `vel`, etc.
 
@@ -240,29 +240,14 @@ class ROSConnector:
         return {n: times[i] for i, n in enumerate(self.estimator_names)}
 
     @property
-    def times_raw(self) -> dict[str, np.float64]:
-        """The times of the last received raw poses for all objects in `tf_names`."""
-        times = np.asarray(self._times, dtype=np.float64).reshape(-1)
-        return {n: times[i] for i, n in enumerate(self.tf_names)}
-
-    @property
     def is_outdated(self) -> dict[str, np.bool]:
-        """Whether the latest estimate of each object in `estimator_names` is outdated.
-
-        Note:
-            The estimator node keeps publishing predictions when an object is not tracked anymore,
-            e.g., when it is occluded. Use `is_outdated_raw` to detect that.
-        """
-        times = np.asarray(self._times, dtype=np.float64).reshape(-1)[len(self.tf_names) :]
-        is_outdated = times < time.time() - self._outdated_after
-        return {n: is_outdated[i] for i, n in enumerate(self.estimator_names)}
-
-    @property
-    def is_outdated_raw(self) -> dict[str, np.bool]:
-        """Whether the latest raw pose of each object in `tf_names` is outdated."""
+        """Whether the raw pose or the estimate of each tracked object is outdated."""
         times = np.asarray(self._times, dtype=np.float64).reshape(-1)
         is_outdated = times < time.time() - self._outdated_after
-        return {n: is_outdated[i] for i, n in enumerate(self.tf_names)}
+        outdated = dict.fromkeys(self.names, False)
+        for i, n in enumerate(self.names):
+            outdated[n] = outdated[n] or is_outdated[i]
+        return outdated
 
     @property
     def active(self) -> bool:

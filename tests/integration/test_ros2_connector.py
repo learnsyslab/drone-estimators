@@ -81,15 +81,13 @@ def test_raw_and_estimated_poses():
         assert np.allclose(connector.pos[est_name], est_pos)
         assert np.allclose(connector.quat[est_name], est_quat)
         assert np.allclose(connector.vel[est_name], est_vel)
-        assert not np.isnan(connector.times_raw[tf_name])
-        assert not np.isnan(connector.times_raw[est_name])
         assert not np.isnan(connector.times[est_name])
-        # Lost tracking only shows in the raw poses, the estimates keep coming
+        # Objects are outdated if either their raw pose or their estimate is
+        assert not any(connector.is_outdated.values())
         est_name_tracked = False
         time.sleep(0.5)
-        assert connector.is_outdated_raw[est_name]
-        assert not connector.is_outdated_raw[tf_name]
-        assert not connector.is_outdated[est_name]
+        assert connector.is_outdated[est_name]
+        assert not connector.is_outdated[tf_name]
     finally:
         if connector is not None:
             connector.close()
