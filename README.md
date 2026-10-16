@@ -1,6 +1,9 @@
 $$
-\huge \displaystyle \hat{\boldsymbol{\mu}}_{x,k+1} = \check{\boldsymbol{\mu}}_{x,k+1} + \mathbf{K}_{k+1} ( \mathbf{z}_{k+1} - \mathbf{C}_{k+1} \check{\boldsymbol{\mu}}_{x,k+1} ) \\
-\hat{\boldsymbol{\Sigma}}_{xx, k+1} = ( \mathbf{I}-\mathbf{K}_{k+1} \mathbf{C}_{k+1}) \check{\boldsymbol{\Sigma}}_{xx, k+1}
+\huge
+\begin{aligned}
+\hat{\boldsymbol{\mu}}_{x,k+1} &= \check{\boldsymbol{\mu}}_{x,k+1} + \mathbf{K}_{k+1} \mathbf{z}_{k+1} \\
+\hat{\boldsymbol{\Sigma}}_{xx,k+1} &= ( \mathbf{I} - \mathbf{K}_{k+1} \mathbf{C}_{k+1} ) \check{\boldsymbol{\Sigma}}_{xx,k+1}
+\end{aligned}
 $$
 
 ---
@@ -85,13 +88,13 @@ jax.config.update("jax_enable_x64", True)  # The jitted filters need 64 bit prec
 kf = KalmanFilter(dt=1 / 200, model="so_rpy", config="cf2x_L250", batch_shape=(10,), jit=True)
 ```
 
-The model-free estimator is `StateEstimator` in `drone_estimators.estimator_legacy`.
+The differentiation-based filter is `DiffFilter` in `drone_estimators.estimator_diff`.
 
 ### ROS 2 node
 
 ```bash
-python -m drone_estimators.ros_nodes.ros2_node --drone_name cf1           # UKF
-python -m drone_estimators.ros_nodes.ros2_node --drone_name cf1 --legacy  # model-free
+python -m drone_estimators.ros_nodes.ros2_node --drone_name cf1 --estimator_type ukf
+python -m drone_estimators.ros_nodes.ros2_node --drone_name cf1 --estimator_type diff
 python -m drone_estimators.ros_nodes.ros2_node --settings path/to/estimators.toml
 ```
 
