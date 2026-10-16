@@ -51,8 +51,8 @@ class ROSConnector:
     * Full state estimation including velocity, angular velocity, and disturbance forces from an
       estimator node.
 
-    The raw `/tf` poses of the estimated objects are additionally available through `pos_raw` and
-    `quat_raw`.
+    The raw `/tf` poses of all objects in `tf_names` are available through `pos_raw` and `quat_raw`.
+    Objects can be tracked both ways. Then, `pos` and `quat` contain their estimates.
 
     Data is accessed through property methods that convert the shared memory arrays into
     dictionaries keyed by object names.
@@ -84,10 +84,10 @@ class ROSConnector:
             update has been received.
 
         Args:
-            tf_names: Names of objects to track using only pose data from `/tf` topic. If None,
-                nothing will be tracked.
-            estimator_names: Names of objects to track with full state estimation. Their raw poses
-                from `/tf` are available in `pos_raw` and `quat_raw`. If None, nothing will be
+            tf_names: Names of objects to track using pose data from `/tf` topic. If None, nothing
+                will be tracked.
+            estimator_names: Names of objects to track with full state estimation. Can overlap with
+                tf_names to also get the raw poses of estimated objects. If None, nothing will be
                 tracked.
             cmd_topic: Topic name for publishing commands. If None, command publishing is disabled.
             timeout: If greater than 0, wait for position updates of all tracked objects before
@@ -103,9 +103,6 @@ class ROSConnector:
         assert rclpy.ok(), "ROS must be initialized before creating a ROSConnector instance."
         self.tf_names = [] if tf_names is None else tf_names
         self.estimator_names = [] if estimator_names is None else estimator_names
-        assert not set(self.tf_names).intersection(set(self.estimator_names)), (
-            "Duplicate names in tf and estimator"
-        )
         assert len(self.tf_names) == len(set(self.tf_names)), "Duplicate items in tf_names"
         assert len(self.estimator_names) == len(set(self.estimator_names)), (
             "Duplicate items in estimator_names"
@@ -117,8 +114,6 @@ class ROSConnector:
         ctx = mp.get_context("spawn")
         self._pos = ctx.Array("f", [float("nan")] * len(self.names) * 3)
         self._quat = ctx.Array("f", [float("nan")] * len(self.names) * 4)
-        self._pos_raw = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 3)
-        self._quat_raw = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 4)
         self._vel = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 3)
         self._ang_vel = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 3)
         self._disturbance = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 6)
@@ -129,19 +124,10 @@ class ROSConnector:
         self.shutdown = ctx.Event()
         atexit.register(lambda: self.shutdown.set())  # Ensure processes are killed on exit
         self.processes = []
-        if self.names:  # Create a process for the /tf callback
+        if self.tf_names:  # Create a process for the /tf callback
             tf_process = ctx.Process(
                 target=tf_update,
-                args=(
-                    self.tf_names,
-                    self.estimator_names,
-                    self._pos,
-                    self._quat,
-                    self._pos_raw,
-                    self._quat_raw,
-                    self._times,
-                    self.shutdown,
-                ),
+                args=(self.tf_names, self._pos, self._quat, self._times, self.shutdown),
             )
             self.processes.append(tf_process)
 
@@ -184,10 +170,10 @@ class ROSConnector:
                 time.sleep(0.01)  # Processes are spinning, so we can sleep here
             else:
                 self.shutdown.set()
-                missing_objects = [name for name, pos in self.pos.items() if np.any(np.isnan(pos))]
-                tf_objects = [n for n in missing_objects if n in self.tf_names]
-                tf_objects += [n for n, pos in self.pos_raw.items() if np.any(np.isnan(pos))]
-                estimator_objects = [n for n in missing_objects if n in self.estimator_names]
+                tf_objects = [n for n, pos in self.pos_raw.items() if np.any(np.isnan(pos))]
+                estimator_objects = [
+                    n for n in self.estimator_names if np.any(np.isnan(self.pos[n]))
+                ]
                 missing_msg = ""
                 if any(tf_objects):
                     missing_msg += (
@@ -206,6 +192,7 @@ class ROSConnector:
     def pos(self) -> dict[str, NDArray]:
         """The latest position data for all tracked objects."""
         pos = np.asarray(self._pos, dtype=np.float32).reshape(-1, 3)
+        # Estimator names come last, so estimates replace raw poses of objects tracked both ways
         return {n: pos[i] for i, n in enumerate(self.names)}
 
     @property
@@ -216,15 +203,15 @@ class ROSConnector:
 
     @property
     def pos_raw(self) -> dict[str, NDArray]:
-        """The latest raw position data from `/tf` for all estimated objects."""
-        pos = np.asarray(self._pos_raw, dtype=np.float32).reshape(-1, 3)
-        return {n: pos[i] for i, n in enumerate(self.estimator_names)}
+        """The latest raw position data from `/tf` for all objects in `tf_names`."""
+        pos = np.asarray(self._pos, dtype=np.float32).reshape(-1, 3)
+        return {n: pos[i] for i, n in enumerate(self.tf_names)}
 
     @property
     def quat_raw(self) -> dict[str, NDArray]:
-        """The latest raw orientation data from `/tf` for all estimated objects."""
-        quat = np.asarray(self._quat_raw, dtype=np.float32).reshape(-1, 4)
-        return {n: quat[i] for i, n in enumerate(self.estimator_names)}
+        """The latest raw orientation data from `/tf` for all objects in `tf_names`."""
+        quat = np.asarray(self._quat, dtype=np.float32).reshape(-1, 4)
+        return {n: quat[i] for i, n in enumerate(self.tf_names)}
 
     @property
     def vel(self) -> dict[str, NDArray]:
@@ -252,16 +239,24 @@ class ROSConnector:
 
     @property
     def times(self) -> dict[str, np.float32]:
-        """The times of the last received data for all tracked objects."""
+        """The times of the last received data for all tracked objects (estimates if available)."""
         times = np.asarray(self._times, dtype=np.float64).reshape(-1)
         return {n: times[i] for i, n in enumerate(self.names)}
 
     @property
     def is_outdated(self) -> dict[str, np.bool]:
-        """Whether the latest data of each tracked object is older than `outdated_after`."""
+        """Whether the latest data of each tracked object is older than `outdated_after`.
+
+        Objects tracked both ways are outdated if either their raw pose or their estimate is. The
+        estimator keeps publishing predictions without new poses, so only the raw pose shows that an
+        object is no longer tracked, e.g., when it is occluded.
+        """
         times = np.asarray(self._times, dtype=np.float64).reshape(-1)
         is_outdated = times < time.time() - self._outdated_after
-        return {n: is_outdated[i] for i, n in enumerate(self.names)}
+        outdated = dict.fromkeys(self.names, False)
+        for i, n in enumerate(self.names):
+            outdated[n] = outdated[n] or is_outdated[i]
+        return outdated
 
     @property
     def active(self) -> bool:
@@ -269,12 +264,9 @@ class ROSConnector:
         # Check if drone is being tracked and if drone has already received updates
         pos_ready = not np.any(np.isnan(np.array(self._pos, dtype=np.float32)))
         quat_ready = not np.any(np.isnan(np.array(self._quat, dtype=np.float32)))
-        pos_raw_ready = not np.any(np.isnan(np.array(self._pos_raw, dtype=np.float32)))
-        quat_raw_ready = not np.any(np.isnan(np.array(self._quat_raw, dtype=np.float32)))
         vel_ready = not np.any(np.isnan(np.array(self._vel, dtype=np.float32)))
         ang_vel_ready = not np.any(np.isnan(np.array(self._ang_vel, dtype=np.float32)))
-        raw_ready = pos_raw_ready and quat_raw_ready
-        return pos_ready and quat_ready and raw_ready and vel_ready and ang_vel_ready
+        return pos_ready and quat_ready and vel_ready and ang_vel_ready
 
     def publish_cmd(self, value: NDArray):
         """Publish a command to ROS.
@@ -300,11 +292,8 @@ class ROSConnector:
 
 def tf_update(
     names: list[str],
-    raw_names: list[str],
     pos: list[SynchronizedArray],
     quat: list[SynchronizedArray],
-    pos_raw: list[SynchronizedArray],
-    quat_raw: list[SynchronizedArray],
     times: list[Synchronized],
     shutdown: Event,
 ):
@@ -312,26 +301,14 @@ def tf_update(
 
     Args:
         names: The names of the objects to track.
-        raw_names: The names of the estimated objects to track the raw poses of.
         pos: The shared memory arrays for the position data.
         quat: The shared memory arrays for the orientation data.
-        pos_raw: The shared memory arrays for the raw position data of the estimated objects.
-        quat_raw: The shared memory arrays for the raw orientation data of the estimated objects.
         times: The shared memory arrays for the time data.
         shutdown: The event to signal shutdown.
     """
     rclpy.init()
     node = rclpy.create_node("tf_updater_" + uuid4().hex)
-    fn = partial(
-        tf_callback,
-        names=names,
-        raw_names=raw_names,
-        pos=pos,
-        quat=quat,
-        pos_raw=pos_raw,
-        quat_raw=quat_raw,
-        times=times,
-    )
+    fn = partial(tf_callback, names=names, pos=pos, quat=quat, times=times)
     sub = node.create_subscription(TFMessage, "/tf", fn, 10)
     while not shutdown.is_set():
         rclpy.spin_once(node, timeout_sec=0.1)
@@ -374,8 +351,10 @@ def estimate_update(
 
     subs = []
     for name in names:
-        # Pose (pos and quat) are shared with all_names, so the index changes!
-        fn = partial(pose_callback, idx=all_names.index(name), pos=pos, quat=quat, times=times)
+        # Pose (pos and quat) are shared with all_names, so the index changes! Since all_names can
+        # also contain the name as tf name, we search the estimator names at the end of all_names.
+        idx = all_names.index(name, len(all_names) - len(names))
+        fn = partial(pose_callback, idx=idx, pos=pos, quat=quat, times=times)
         sub = node.create_subscription(
             PoseStamped, f"/drones/{name}/estimate/pose", fn, qos_profile
         )
@@ -433,11 +412,8 @@ def command_publisher(queue: mp.Queue, cmd_topic: str, shutdown: Event):
 def tf_callback(
     data: TFMessage,
     names: list[str],
-    raw_names: list[str],
     pos: SynchronizedArray,
     quat: SynchronizedArray,
-    pos_raw: SynchronizedArray,
-    quat_raw: SynchronizedArray,
     times: SynchronizedArray,
 ):
     """Save the pose data from the /tf topic into shared memory arrays.
@@ -445,11 +421,8 @@ def tf_callback(
     Args:
         data: The TFMessage message.
         names: The names of the objects to track.
-        raw_names: The names of the estimated objects to track the raw poses of.
         pos: The shared memory array for the position values.
         quat: The shared memory array for the orientation values.
-        pos_raw: The shared memory array for the raw position values of the estimated objects.
-        quat_raw: The shared memory array for the raw orientation values of the estimated objects.
         times: The shared memory array for the time values.
     """
     for tf in data.transforms:
@@ -460,11 +433,6 @@ def tf_callback(
             pos[idx * 3 : (idx + 1) * 3] = [T.x, T.y, T.z]
             quat[idx * 4 : (idx + 1) * 4] = [Rot.x, Rot.y, Rot.z, Rot.w]
             times[idx] = time.time()
-        elif name in raw_names:
-            T, Rot = tf.transform.translation, tf.transform.rotation
-            idx = raw_names.index(name)
-            pos_raw[idx * 3 : (idx + 1) * 3] = [T.x, T.y, T.z]
-            quat_raw[idx * 4 : (idx + 1) * 4] = [Rot.x, Rot.y, Rot.z, Rot.w]
 
 
 def pose_callback(

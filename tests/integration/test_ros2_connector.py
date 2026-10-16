@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 from threading import Thread
 from uuid import uuid4
 
@@ -31,7 +32,7 @@ def _transform(name: str, pos: list[float], quat: list[float]) -> TransformStamp
 
 @pytest.mark.integration
 def test_raw_and_estimated_poses():
-    """Tests that estimated objects provide estimates and raw tf poses at the same time."""
+    """Tests that objects can be tracked with tf and the estimator at the same time."""
     # Unique names, so that real tf data (e.g. from motion capture) cannot interfere
     tf_name, est_name = f"gate_{uuid4().hex[:8]}", f"cf_{uuid4().hex[:8]}"
     tf_pos, tf_quat = [1.0, 2.0, 3.0], [0.0, 0.0, 0.0, 1.0]
@@ -44,9 +45,12 @@ def test_raw_and_estimated_poses():
     tf_pub = node.create_publisher(TFMessage, "/tf", 10)
     pose_pub = node.create_publisher(PoseStamped, f"/drones/{est_name}/estimate/pose", 10)
     twist_pub = node.create_publisher(TwistStamped, f"/drones/{est_name}/estimate/twist", 10)
+    est_name_tracked = True
 
     def publish():
-        tfs = [_transform(tf_name, tf_pos, tf_quat), _transform(est_name, raw_pos, raw_quat)]
+        tfs = [_transform(tf_name, tf_pos, tf_quat)]
+        if est_name_tracked:
+            tfs.append(_transform(est_name, raw_pos, raw_quat))
         tf_pub.publish(TFMessage(transforms=tfs))
         pose = PoseStamped()
         p, q = pose.pose.position, pose.pose.orientation
@@ -65,11 +69,14 @@ def test_raw_and_estimated_poses():
 
     connector = None
     try:
-        connector = ROSConnector(tf_names=[tf_name], estimator_names=[est_name], timeout=10.0)
+        connector = ROSConnector(
+            tf_names=[tf_name, est_name], estimator_names=[est_name], timeout=10.0
+        )
         # Objects tracked with tf only get the tf pose
         assert np.allclose(connector.pos[tf_name], tf_pos)
         assert np.allclose(connector.quat[tf_name], tf_quat)
-        # Estimated objects get the estimate and additionally the raw tf pose
+        assert np.allclose(connector.pos_raw[tf_name], tf_pos)
+        # Objects tracked both ways get the estimate and additionally the raw tf pose
         assert np.allclose(connector.pos[est_name], est_pos)
         assert np.allclose(connector.quat[est_name], est_quat)
         assert np.allclose(connector.pos_raw[est_name], raw_pos)
@@ -78,6 +85,12 @@ def test_raw_and_estimated_poses():
         # Both kinds of objects have their own update times
         assert not np.isnan(connector.times[tf_name])
         assert not np.isnan(connector.times[est_name])
+        # Objects tracked both ways are outdated once their tf poses stop, even with new estimates
+        assert not any(connector.is_outdated.values())
+        est_name_tracked = False
+        time.sleep(0.5)
+        assert connector.is_outdated[est_name]
+        assert not connector.is_outdated[tf_name]
     finally:
         if connector is not None:
             connector.close()
