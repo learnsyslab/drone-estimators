@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import time
 from threading import Thread
+from types import SimpleNamespace
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 import numpy as np
@@ -16,9 +18,18 @@ os.environ["ROS_AUTOMATIC_DISCOVERY_RANGE"] = "LOCALHOST"
 import rclpy
 from geometry_msgs.msg import PoseStamped, TransformStamped, TwistStamped
 from rclpy.executors import SingleThreadedExecutor
+from std_msgs.msg import Float64MultiArray
 from tf2_msgs.msg import TFMessage
 
 from drone_estimators.ros_nodes.ros2_connector import ROSConnector
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
+
+GATE_POS, GATE_QUAT = [1.0, 2.0, 3.0], [0.0, 0.0, 0.0, 1.0]
+RAW_POS, RAW_QUAT = [4.0, 5.0, 6.0], [0.0, 0.0, 1.0, 0.0]
+EST_POS, EST_QUAT = [7.0, 8.0, 9.0], [1.0, 0.0, 0.0, 0.0]
+EST_VEL, EST_ROTOR_VEL = [0.1, 0.2, 0.3], [0.4, 0.5, 0.6, 0.7]
 
 
 def _transform(name: str, pos: list[float], quat: list[float]) -> TransformStamped:
@@ -30,68 +41,98 @@ def _transform(name: str, pos: list[float], quat: list[float]) -> TransformStamp
     return tf
 
 
-@pytest.mark.integration
-def test_raw_and_estimated_poses():
-    """Tests that objects can be tracked with tf and the estimator at the same time."""
+@pytest.fixture
+def fake() -> Iterator[SimpleNamespace]:
+    """Publish the raw poses of a gate and a drone on /tf, and estimates of the drone."""
     # Unique names, so that real tf data (e.g. from motion capture) cannot interfere
-    tf_name, est_name = f"gate_{uuid4().hex[:8]}", f"cf_{uuid4().hex[:8]}"
-    tf_pos, tf_quat = [1.0, 2.0, 3.0], [0.0, 0.0, 0.0, 1.0]
-    raw_pos, raw_quat = [4.0, 5.0, 6.0], [0.0, 0.0, 1.0, 0.0]
-    est_pos, est_quat = [7.0, 8.0, 9.0], [1.0, 0.0, 0.0, 0.0]
-    est_vel = [0.1, 0.2, 0.3]
-
+    fake = SimpleNamespace(gate=f"gate_{uuid4().hex[:8]}", drone=f"cf_{uuid4().hex[:8]}")
+    fake.drone_tracked = True
     rclpy.init()
     node = rclpy.create_node("test_ros2_connector_" + uuid4().hex)
     tf_pub = node.create_publisher(TFMessage, "/tf", 10)
-    pose_pub = node.create_publisher(PoseStamped, f"/drones/{est_name}/estimate/pose", 10)
-    twist_pub = node.create_publisher(TwistStamped, f"/drones/{est_name}/estimate/twist", 10)
-    est_name_tracked = True
+    topic = f"/drones/{fake.drone}/estimate"
+    pose_pub = node.create_publisher(PoseStamped, f"{topic}/pose", 10)
+    twist_pub = node.create_publisher(TwistStamped, f"{topic}/twist", 10)
+    rotor_vel_pub = node.create_publisher(Float64MultiArray, f"{topic}/rotor_vel", 10)
 
     def publish():
-        tfs = [_transform(tf_name, tf_pos, tf_quat)]
-        if est_name_tracked:
-            tfs.append(_transform(est_name, raw_pos, raw_quat))
+        tfs = [_transform(fake.gate, GATE_POS, GATE_QUAT)]
+        if fake.drone_tracked:
+            tfs.append(_transform(fake.drone, RAW_POS, RAW_QUAT))
         tf_pub.publish(TFMessage(transforms=tfs))
         pose = PoseStamped()
         p, q = pose.pose.position, pose.pose.orientation
-        p.x, p.y, p.z = est_pos
-        q.x, q.y, q.z, q.w = est_quat
+        p.x, p.y, p.z = EST_POS
+        q.x, q.y, q.z, q.w = EST_QUAT
         pose_pub.publish(pose)
         twist = TwistStamped()
-        twist.twist.linear.x, twist.twist.linear.y, twist.twist.linear.z = est_vel
+        twist.twist.linear.x, twist.twist.linear.y, twist.twist.linear.z = EST_VEL
         twist_pub.publish(twist)
+        rotor_vel_pub.publish(Float64MultiArray(data=EST_ROTOR_VEL))
 
     node.create_timer(0.01, publish)
     executor = SingleThreadedExecutor()
     executor.add_node(node)
-    spin_thread = Thread(target=executor.spin, daemon=True)
-    spin_thread.start()
+    Thread(target=executor.spin, daemon=True).start()
+    yield fake
+    executor.shutdown()
+    node.destroy_node()
+    rclpy.shutdown()
 
-    connector = None
-    try:
-        connector = ROSConnector(
-            tf_names=[tf_name, est_name], estimator_names=[est_name], timeout=10.0
-        )
-        # Raw tf poses and estimates are kept separately
-        assert np.allclose(connector.pos_raw[tf_name], tf_pos)
-        assert np.allclose(connector.quat_raw[tf_name], tf_quat)
-        assert np.allclose(connector.pos_raw[est_name], raw_pos)
-        assert np.allclose(connector.quat_raw[est_name], raw_quat)
-        assert tf_name not in connector.pos
-        assert np.allclose(connector.pos[est_name], est_pos)
-        assert np.allclose(connector.quat[est_name], est_quat)
-        assert np.allclose(connector.vel[est_name], est_vel)
-        assert not np.isnan(connector.times_raw[est_name])
-        assert not np.isnan(connector.times[est_name])
-        # Objects are outdated if either their raw pose or their estimate is
-        assert not any(connector.is_outdated.values())
-        est_name_tracked = False
-        time.sleep(0.5)
-        assert connector.is_outdated[est_name]
-        assert not connector.is_outdated[tf_name]
-    finally:
-        if connector is not None:
-            connector.close()
-        executor.shutdown()
-        node.destroy_node()
-        rclpy.shutdown()
+
+@pytest.fixture
+def connect(fake: SimpleNamespace) -> Iterator[Callable[..., ROSConnector]]:
+    """Create connectors that are closed after the test."""
+    connectors = []
+
+    def connect(**kwargs: list[str]) -> ROSConnector:
+        connectors.append(ROSConnector(timeout=10.0, **kwargs))
+        return connectors[-1]
+
+    yield connect
+    for connector in connectors:
+        connector.close()
+
+
+@pytest.mark.integration
+def test_tf_names(fake: SimpleNamespace, connect: Callable[..., ROSConnector]):
+    """Tests that objects in tf_names provide their raw poses."""
+    connector = connect(tf_names=[fake.gate])
+    assert np.allclose(connector.pos_raw[fake.gate], GATE_POS)
+    assert np.allclose(connector.quat_raw[fake.gate], GATE_QUAT)
+    assert not np.isnan(connector.times_raw[fake.gate])
+    assert fake.gate not in connector.pos
+
+
+@pytest.mark.integration
+def test_estimator_names(fake: SimpleNamespace, connect: Callable[..., ROSConnector]):
+    """Tests that objects in estimator_names provide their estimates."""
+    connector = connect(estimator_names=[fake.drone])
+    time.sleep(0.2)  # The timeout does not wait for rotor velocities
+    assert np.allclose(connector.pos[fake.drone], EST_POS)
+    assert np.allclose(connector.quat[fake.drone], EST_QUAT)
+    assert np.allclose(connector.vel[fake.drone], EST_VEL)
+    assert np.allclose(connector.rotor_vel[fake.drone], EST_ROTOR_VEL)
+    assert not np.isnan(connector.times[fake.drone])
+    assert fake.drone not in connector.pos_raw
+
+
+@pytest.mark.integration
+def test_tf_and_estimator_names(fake: SimpleNamespace, connect: Callable[..., ROSConnector]):
+    """Tests that objects can provide their raw poses and estimates at the same time."""
+    connector = connect(tf_names=[fake.drone], estimator_names=[fake.drone])
+    assert np.allclose(connector.pos_raw[fake.drone], RAW_POS)
+    assert np.allclose(connector.quat_raw[fake.drone], RAW_QUAT)
+    assert np.allclose(connector.pos[fake.drone], EST_POS)
+    assert np.allclose(connector.quat[fake.drone], EST_QUAT)
+
+
+@pytest.mark.integration
+def test_is_outdated(fake: SimpleNamespace, connect: Callable[..., ROSConnector]):
+    """Tests that objects are outdated if either their raw pose or their estimate is."""
+    connector = connect(tf_names=[fake.gate, fake.drone], estimator_names=[fake.drone])
+    assert not any(connector.is_outdated.values())
+    fake.drone_tracked = False  # Like the estimator node, the fake keeps publishing estimates
+    time.sleep(0.5)
+    assert connector.is_outdated[fake.drone]
+    assert not connector.is_outdated[fake.gate]
