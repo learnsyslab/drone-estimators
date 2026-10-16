@@ -127,7 +127,7 @@ class MPEstimator:
         # Estimated state publisher buffers
         self._pose_buffer = ctx.Array("d", [0.0] * 7 * n_drones)
         self._twist_buffer = ctx.Array("d", [0.0] * 6 * n_drones)
-        self._forces_buffer = ctx.Array("d", [0.0] * 4 * n_drones)  # Motor forces, optional
+        self._rotor_vel_buffer = ctx.Array("d", [0.0] * 4 * n_drones)  # Rotor velocities, optional
         self._wrench_buffer = ctx.Array("d", [0.0] * 6 * n_drones)  # External wrench, optional
 
         args = (
@@ -143,7 +143,7 @@ class MPEstimator:
             self.drone_names,
             self._pose_buffer,
             self._twist_buffer,
-            self._forces_buffer,
+            self._rotor_vel_buffer,
             self._wrench_buffer,
             self._publish_update,
             startup,
@@ -239,7 +239,7 @@ class MPEstimator:
         cmd_msg_buffer = _view(self._cmd_msg_buffer, n_drones)
         pose_buffer = _view(self._pose_buffer, n_drones)
         twist_buffer = _view(self._twist_buffer, n_drones)
-        forces_buffer = _view(self._forces_buffer, n_drones)
+        rotor_vel_buffer = _view(self._rotor_vel_buffer, n_drones)
         wrench_buffer = _view(self._wrench_buffer, n_drones)
 
         k = 0
@@ -318,8 +318,8 @@ class MPEstimator:
                     twist_buffer[:, :3] = estimator_data.vel
                     twist_buffer[:, 3:] = estimator_data.ang_vel
                 if estimator_data.rotor_vel is not None:
-                    with self._forces_buffer.get_lock():
-                        forces_buffer[:] = estimator_data.rotor_vel
+                    with self._rotor_vel_buffer.get_lock():
+                        rotor_vel_buffer[:] = estimator_data.rotor_vel
                 if estimator_data.dist_f is not None:
                     with self._wrench_buffer.get_lock():
                         wrench_buffer[:, :3] = estimator_data.dist_f
@@ -473,7 +473,7 @@ class MPEstimator:
         drone_names: list[str],
         pose_buffer: SynchronizedArray,
         twist_buffer: SynchronizedArray,
-        forces_buffer: SynchronizedArray,
+        rotor_vel_buffer: SynchronizedArray,
         wrench_buffer: SynchronizedArray,
         update: Event,
         startup: Barrier,
@@ -487,7 +487,7 @@ class MPEstimator:
             history=QoSHistoryPolicy.KEEP_LAST,
             depth=1,
         )
-        pubs_pose, pubs_twist, pubs_forces, pubs_wrench, pubs_markers = [], [], [], [], []
+        pubs_pose, pubs_twist, pubs_rotor_vel, pubs_wrench, pubs_markers = [], [], [], [], []
         for drone_name in drone_names:
             # pos, quat
             pub_pose = node.create_publisher(
@@ -497,9 +497,11 @@ class MPEstimator:
             pub_twist = node.create_publisher(
                 TwistStamped, f"/drones/{drone_name}/estimate/twist", qos_profile=qos_profile
             )
-            # f_motors
-            pub_forces = node.create_publisher(
-                Float64MultiArray, f"/drones/{drone_name}/estimate/forces", qos_profile=qos_profile
+            # rotor_vel
+            pub_rotor_vel = node.create_publisher(
+                Float64MultiArray,
+                f"/drones/{drone_name}/estimate/rotor_vel",
+                qos_profile=qos_profile,
             )
             # f_dis, t_dis
             pub_wrench = node.create_publisher(
@@ -511,7 +513,7 @@ class MPEstimator:
             )
             pubs_pose.append(pub_pose)
             pubs_twist.append(pub_twist)
-            pubs_forces.append(pub_forces)
+            pubs_rotor_vel.append(pub_rotor_vel)
             pubs_wrench.append(pub_wrench)
             pubs_markers.append(pub_markers)
         signal.signal(signal.SIGINT, lambda c, _: shutdown.set())  # Gracefully handle Ctrl-C
@@ -527,7 +529,7 @@ class MPEstimator:
             n_drones = len(drone_names)
             poses = np.asarray(pose_buffer, dtype=np.float64, copy=True).reshape(n_drones, -1)
             twists = np.asarray(twist_buffer, dtype=np.float64, copy=True).reshape(n_drones, -1)
-            forces_all = np.asarray(forces_buffer, dtype=np.float64, copy=True).reshape(
+            rotor_vel_all = np.asarray(rotor_vel_buffer, dtype=np.float64, copy=True).reshape(
                 n_drones, -1
             )
             wrenches = np.asarray(wrench_buffer, dtype=np.float64, copy=True).reshape(n_drones, -1)
@@ -541,10 +543,10 @@ class MPEstimator:
                 twist_stamped = create_twist(time_stamp, drone_name, twist[:3], twist[3:])
                 pubs_twist[i].publish(twist_stamped)
 
-                forces = forces_all[i]
+                rotor_vel = rotor_vel_all[i]
                 # This type doesn't have a stamp!
-                forces_array = create_array(time_stamp, drone_name, forces)
-                pubs_forces[i].publish(forces_array)
+                rotor_vel_array = create_array(time_stamp, drone_name, rotor_vel)
+                pubs_rotor_vel[i].publish(rotor_vel_array)
 
                 wrench = wrenches[i]
                 wrench_stamped = create_wrench(time_stamp, drone_name, wrench[:3], wrench[3:])
@@ -562,7 +564,7 @@ class MPEstimator:
                 )
                 pubs_markers[i].publish(markers)
 
-        for pub in pubs_pose + pubs_twist + pubs_forces + pubs_wrench:
+        for pub in pubs_pose + pubs_twist + pubs_rotor_vel + pubs_wrench:
             pub.destroy()
         node.destroy_node()
 
