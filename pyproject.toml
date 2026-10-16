@@ -59,7 +59,7 @@ libgl-devel = "*"
 [tool.pixi.environments]
 default = { features = ["kilted"], solve-group = "default" }
 tests = { features = ["kilted", "tests"], solve-group = "default" }
-docs = { features = ["kilted", "docs"], solve-group = "default" }
+docs = { features = ["docs"], solve-group = "default" }
 dist = { features = ["kilted", "dist"], solve-group = "default" }
 
 # tests
@@ -72,7 +72,7 @@ tests = { cmd = "pytest -v tests", description = "Run tests" }
 
 # docs
 [tool.pixi.feature.docs.dependencies]
-mkdocs = ">=1.5.0"
+properdocs = ">=1.5.0"
 mkdocs-material = ">=9.0.0"
 python = ">=3.10"
 
@@ -84,8 +84,8 @@ mkdocs-literate-nav = ">=0.6.0"
 mkdocs-section-index = ">=0.3.0"
 
 [tool.pixi.feature.docs.tasks]
-docs-serve = { cmd = "mkdocs serve", description = "Serve docs locally" }
-docs-build = { cmd = "mkdocs build", description = "Build docs" }
+docs-serve = { cmd = "properdocs serve --livereload", description = "Serve docs locally" }
+docs-build = { cmd = "properdocs build --strict", description = "Build docs" }
 
 # distribution
 [tool.pixi.feature.dist.pypi-dependencies]
