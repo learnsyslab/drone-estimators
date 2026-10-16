@@ -899,7 +899,7 @@ def rmse(error_array: NDArray) -> np.floating:
 if __name__ == "__main__":
     drone_name = "cf52"
     estimator_types = [
-        # "legacy",
+        # "diff",
         # "ukf_fitted_DI_rpyt",
         "ukf_fitted_DI_D_rpyt",
         "ukf_fitted_DI_DD_rpyt",

@@ -9,7 +9,7 @@ import pytest
     "module",
     [
         "drone_estimators.estimator_kalman",
-        "drone_estimators.estimator_legacy",
+        "drone_estimators.estimator_diff",
         "drone_estimators.ros_nodes.ros2_node",
     ],
 )

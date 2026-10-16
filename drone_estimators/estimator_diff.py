@@ -1,9 +1,9 @@
-"""A simple smoothing estimator.
+"""A differentiation-based filter.
 
 This estimator is originally from Chris McKinnon.
 It was adapted to work with similarly to the new estimators for backwards compatability.
 
-The filter itself is the pure function legacy_correct, which the StateEstimator class jits.
+The filter itself is the pure function diff_correct, which the DiffFilter class jits.
 Quaternions are scalar last and all rotations use scipy's Rotation.
 """
 
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class LegacySettings:
+class DiffSettings:
     """Time constants of the low pass filters."""
 
     tau_est_trans: float
@@ -42,8 +42,8 @@ class LegacySettings:
 
 
 @dataclass
-class LegacyData:
-    """State of the legacy estimator."""
+class DiffData:
+    """State of the differentiation-based filter."""
 
     # Estimated states
     pos: Array
@@ -63,7 +63,7 @@ class LegacyData:
     quat_prev: Array
 
     @classmethod
-    def create_empty(cls, batch_shape: tuple[int, ...] = ()) -> LegacyData:
+    def create_empty(cls, batch_shape: tuple[int, ...] = ()) -> DiffData:
         """Create the initial state."""
         zeros = np.zeros((*batch_shape, 3))
         quat = np.tile([0.0, 0.0, 0.0, 1.0], (*batch_shape, 1))
@@ -82,13 +82,13 @@ class LegacyData:
         )
 
 
-class StateEstimator(object):
+class DiffFilter(object):
     """Vicon state estimation and filtering.
 
     Parameters
     ----------
     filter_parameters : sequence of floats
-        The 5 time constants of the low pass filters, see LegacySettings
+        The 5 time constants of the low pass filters, see DiffSettings
     batch_shape : tuple of ints
         The batch dimensions, e.g., (n_drones,). All arrays have leading batch dimensions.
     jit : bool
@@ -103,25 +103,25 @@ class StateEstimator(object):
         # amplifies the rounding errors of the measurements too much.
         if jit and not jax.config.jax_enable_x64:
             raise RuntimeError(
-                "The legacy estimator needs 64 bit precision. "
+                "The differentiation-based filter needs 64 bit precision. "
                 'Call jax.config.update("jax_enable_x64", True) before creating it.'
             )
-        self.settings = LegacySettings(*filter_parameters)
-        self.data = LegacyData.create_empty(batch_shape)
+        self.settings = DiffSettings(*filter_parameters)
+        self.data = DiffData.create_empty(batch_shape)
         self.dt = np.zeros(batch_shape)  # Time since the last correction
 
-        self._correct = legacy_correct
+        self._correct = diff_correct
         if jit:
             self.data = jax.tree.map(jnp.asarray, self.data)
-            self._correct = jax.jit(legacy_correct)
+            self._correct = jax.jit(diff_correct)
             # Compile now instead of when the first measurement arrives
             pos, quat, mask = self.data.pos, self.data.quat, np.zeros(batch_shape, dtype=bool)
             self._correct(self.data, self.settings, pos, quat, self.dt, mask)
         self._update_estimate()
 
     def predict(self, dt: float) -> EstimatorData:
-        """This function is not part of the legacy estimator and only for compatability."""
-        # Since the legacy estimator doesn't inherently support the prediction/correction
+        """This function is not part of the original filter and only for compatability."""
+        # Since the original filter doesn't inherently support the prediction/correction
         # form of a Kalman filter, we only step the time in the prediction step. In the
         # correction step, we use the accumulated time step size to correct with the
         # correct dt. Therefore, the estimate itself only changes in the correction step.
@@ -129,7 +129,7 @@ class StateEstimator(object):
         return self._estimate
 
     def correct(self, pos: Array, quat: Array, mask: Array | None = None) -> EstimatorData:
-        """This function is not part of the legacy estimator and only for compatability.
+        """This function is not part of the original filter and only for compatability.
 
         If given, only batch elements where mask is True are corrected.
         """
@@ -141,7 +141,7 @@ class StateEstimator(object):
         return self._estimate
 
     def set_state(self, pos: Array, quat: Array):
-        """This function is not part of the legacy estimator and only for compatability."""
+        """This function is not part of the original filter and only for compatability."""
         pos = np.asarray(pos, dtype=np.float64)
         quat = np.asarray(quat, dtype=np.float64)
         # Also use the state as the previous measurement. Otherwise, the first numeric
@@ -155,14 +155,14 @@ class StateEstimator(object):
         self._estimate = EstimatorData.create(pos, quat, vel, ang_vel)
 
 
-def legacy_correct(
-    data: LegacyData,
-    settings: LegacySettings,
+def diff_correct(
+    data: DiffData,
+    settings: DiffSettings,
     pos: Array,
     quat: Array,
     dt: float,
     mask: Array | None = None,
-) -> LegacyData:
+) -> DiffData:
     """Correct the estimate with a new measurement.
 
     Args:
@@ -189,9 +189,7 @@ def legacy_correct(
     return data if mask is None else select(mask, data, data_in)
 
 
-def compute_numerical_derivatives(
-    data: LegacyData, pos: Array, quat: Array, dt: float
-) -> LegacyData:
+def compute_numerical_derivatives(data: DiffData, pos: Array, quat: Array, dt: float) -> DiffData:
     """Compute velocity, acceleration, and angular velocity from consecutive measurements."""
     xp = data.pos.__array_namespace__()
 
@@ -213,7 +211,7 @@ def compute_numerical_derivatives(
     )
 
 
-def prior_update(data: LegacyData, dt: float) -> LegacyData:
+def prior_update(data: DiffData, dt: float) -> DiffData:
     """Predict the state assuming constant acceleration and angular velocity."""
     pos = data.pos + dt * data.vel + 0.5 * dt * dt * data.acc
     vel = data.vel + dt * data.acc
@@ -222,8 +220,8 @@ def prior_update(data: LegacyData, dt: float) -> LegacyData:
 
 
 def low_pass_filter(
-    data: LegacyData, settings: LegacySettings, pos: Array, quat: Array, dt: float
-) -> LegacyData:
+    data: DiffData, settings: DiffSettings, pos: Array, quat: Array, dt: float
+) -> DiffData:
     """Move the predicted state towards the measurements and their numerical derivatives.
 
     Each quantity moves by the fraction 1 - exp(-dt / tau) of its difference to the measurement.
