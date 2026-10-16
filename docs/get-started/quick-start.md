@@ -47,6 +47,9 @@ The estimate is an `EstimatorData` with the fields `pos`, `quat`, `vel`, `ang_ve
 !!! note "Rotor velocities"
     `estimate_rotor_vel=True` requires a model with rotor dynamics, i.e., `first_principles`, `so_rpy_rotor`, or `so_rpy_rotor_drag`.
 
+!!! warning "first_principles"
+    The ROS node does not support `first_principles`, since it only receives attitude and thrust commands, not motor velocities. The noise parameters of the UKF are tuned for the `so_rpy` models and need to be adjusted for `first_principles`, see [#15](https://github.com/learnsyslab/drone-estimators/issues/15).
+
 ## Differentiation-based filter
 
 The `DiffFilter` needs neither a model nor commands. It low pass filters the measurements and their numerical derivatives with five time constants for the position, velocity, acceleration, orientation, and angular velocity.
