@@ -47,12 +47,11 @@ class ROSConnector:
 
     The class supports two types of tracking:
 
-    * Simple pose tracking from `/tf` topics
+    * Raw pose tracking from `/tf` topics, available in `pos_raw` and `quat_raw`.
     * Full state estimation including velocity, angular velocity, and disturbance forces from an
-      estimator node.
+      estimator node, available in `pos`, `quat`, `vel`, etc.
 
-    The raw `/tf` poses of all objects in `tf_names` are available through `pos_raw` and `quat_raw`.
-    Objects can be tracked both ways. Then, `pos` and `quat` contain their estimates.
+    An object can be tracked both ways at the same time.
 
     Data is accessed through property methods that convert the shared memory arrays into
     dictionaries keyed by object names.
@@ -84,11 +83,10 @@ class ROSConnector:
             update has been received.
 
         Args:
-            tf_names: Names of objects to track using pose data from `/tf` topic. If None, nothing
-                will be tracked.
+            tf_names: Names of objects to track with their raw poses from the `/tf` topic. If None,
+                nothing will be tracked.
             estimator_names: Names of objects to track with full state estimation. Can overlap with
-                tf_names to also get the raw poses of estimated objects. If None, nothing will be
-                tracked.
+                tf_names. If None, nothing will be tracked.
             cmd_topic: Topic name for publishing commands. If None, command publishing is disabled.
             timeout: If greater than 0, wait for position updates of all tracked objects before
                 returning.
@@ -112,6 +110,7 @@ class ROSConnector:
         self._outdated_after = outdated_after
         # Create synchronized, shared arrays for all quantities
         ctx = mp.get_context("spawn")
+        # pos, quat, and times hold the raw poses of tf_names first, then the estimates
         self._pos = ctx.Array("f", [float("nan")] * len(self.names) * 3)
         self._quat = ctx.Array("f", [float("nan")] * len(self.names) * 4)
         self._vel = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 3)
@@ -171,9 +170,7 @@ class ROSConnector:
             else:
                 self.shutdown.set()
                 tf_objects = [n for n, pos in self.pos_raw.items() if np.any(np.isnan(pos))]
-                estimator_objects = [
-                    n for n in self.estimator_names if np.any(np.isnan(self.pos[n]))
-                ]
+                estimator_objects = [n for n, pos in self.pos.items() if np.any(np.isnan(pos))]
                 missing_msg = ""
                 if any(tf_objects):
                     missing_msg += (
@@ -190,16 +187,15 @@ class ROSConnector:
 
     @property
     def pos(self) -> dict[str, NDArray]:
-        """The latest position data for all tracked objects."""
-        pos = np.asarray(self._pos, dtype=np.float32).reshape(-1, 3)
-        # Estimator names come last, so estimates replace raw poses of objects tracked both ways
-        return {n: pos[i] for i, n in enumerate(self.names)}
+        """The latest estimated position data for all objects in `estimator_names`."""
+        pos = np.asarray(self._pos, dtype=np.float32).reshape(-1, 3)[len(self.tf_names) :]
+        return {n: pos[i] for i, n in enumerate(self.estimator_names)}
 
     @property
     def quat(self) -> dict[str, NDArray]:
-        """The latest orientation data for all tracked objects."""
-        quat = np.asarray(self._quat, dtype=np.float32).reshape(-1, 4)
-        return {n: quat[i] for i, n in enumerate(self.names)}
+        """The latest estimated orientation data for all objects in `estimator_names`."""
+        quat = np.asarray(self._quat, dtype=np.float32).reshape(-1, 4)[len(self.tf_names) :]
+        return {n: quat[i] for i, n in enumerate(self.estimator_names)}
 
     @property
     def pos_raw(self) -> dict[str, NDArray]:
@@ -238,25 +234,35 @@ class ROSConnector:
         return {n: forces[i] for i, n in enumerate(self.estimator_names)}
 
     @property
-    def times(self) -> dict[str, np.float32]:
-        """The times of the last received data for all tracked objects (estimates if available)."""
+    def times(self) -> dict[str, np.float64]:
+        """The times of the last received estimates for all objects in `estimator_names`."""
+        times = np.asarray(self._times, dtype=np.float64).reshape(-1)[len(self.tf_names) :]
+        return {n: times[i] for i, n in enumerate(self.estimator_names)}
+
+    @property
+    def times_raw(self) -> dict[str, np.float64]:
+        """The times of the last received raw poses for all objects in `tf_names`."""
         times = np.asarray(self._times, dtype=np.float64).reshape(-1)
-        return {n: times[i] for i, n in enumerate(self.names)}
+        return {n: times[i] for i, n in enumerate(self.tf_names)}
 
     @property
     def is_outdated(self) -> dict[str, np.bool]:
-        """Whether the latest data of each tracked object is older than `outdated_after`.
+        """Whether the latest estimate of each object in `estimator_names` is outdated.
 
-        Objects tracked both ways are outdated if either their raw pose or their estimate is. The
-        estimator keeps publishing predictions without new poses, so only the raw pose shows that an
-        object is no longer tracked, e.g., when it is occluded.
+        Note:
+            The estimator node keeps publishing predictions when an object is not tracked anymore,
+            e.g., when it is occluded. Use `is_outdated_raw` to detect that.
         """
+        times = np.asarray(self._times, dtype=np.float64).reshape(-1)[len(self.tf_names) :]
+        is_outdated = times < time.time() - self._outdated_after
+        return {n: is_outdated[i] for i, n in enumerate(self.estimator_names)}
+
+    @property
+    def is_outdated_raw(self) -> dict[str, np.bool]:
+        """Whether the latest raw pose of each object in `tf_names` is outdated."""
         times = np.asarray(self._times, dtype=np.float64).reshape(-1)
         is_outdated = times < time.time() - self._outdated_after
-        outdated = dict.fromkeys(self.names, False)
-        for i, n in enumerate(self.names):
-            outdated[n] = outdated[n] or is_outdated[i]
-        return outdated
+        return {n: is_outdated[i] for i, n in enumerate(self.tf_names)}
 
     @property
     def active(self) -> bool:

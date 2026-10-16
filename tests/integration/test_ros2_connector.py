@@ -72,25 +72,24 @@ def test_raw_and_estimated_poses():
         connector = ROSConnector(
             tf_names=[tf_name, est_name], estimator_names=[est_name], timeout=10.0
         )
-        # Objects tracked with tf only get the tf pose
-        assert np.allclose(connector.pos[tf_name], tf_pos)
-        assert np.allclose(connector.quat[tf_name], tf_quat)
+        # Raw tf poses and estimates are kept separately
         assert np.allclose(connector.pos_raw[tf_name], tf_pos)
-        # Objects tracked both ways get the estimate and additionally the raw tf pose
-        assert np.allclose(connector.pos[est_name], est_pos)
-        assert np.allclose(connector.quat[est_name], est_quat)
+        assert np.allclose(connector.quat_raw[tf_name], tf_quat)
         assert np.allclose(connector.pos_raw[est_name], raw_pos)
         assert np.allclose(connector.quat_raw[est_name], raw_quat)
+        assert tf_name not in connector.pos
+        assert np.allclose(connector.pos[est_name], est_pos)
+        assert np.allclose(connector.quat[est_name], est_quat)
         assert np.allclose(connector.vel[est_name], est_vel)
-        # Both kinds of objects have their own update times
-        assert not np.isnan(connector.times[tf_name])
+        assert not np.isnan(connector.times_raw[tf_name])
+        assert not np.isnan(connector.times_raw[est_name])
         assert not np.isnan(connector.times[est_name])
-        # Objects tracked both ways are outdated once their tf poses stop, even with new estimates
-        assert not any(connector.is_outdated.values())
+        # Lost tracking only shows in the raw poses, the estimates keep coming
         est_name_tracked = False
         time.sleep(0.5)
-        assert connector.is_outdated[est_name]
-        assert not connector.is_outdated[tf_name]
+        assert connector.is_outdated_raw[est_name]
+        assert not connector.is_outdated_raw[tf_name]
+        assert not connector.is_outdated[est_name]
     finally:
         if connector is not None:
             connector.close()
