@@ -5,7 +5,7 @@ $$
 
 ---
 
-Drone state estimators @ LSY. Contains a model-free (smoothing) and a model-based (UKF) state estimator for drones, and a ROS 2 node that runs them on motion capture data.
+Drone state estimators @ LSY. Contains model free (smoothing) and model based (EKF, UKF) state estimators for drones.
 
 [![Python Version]][Python Version URL] [![PyPI]][PyPI URL] [![ROS 2]][ROS 2 URL] [![Ruff Check]][Ruff Check URL] [![Tests]][Tests URL] [![Docs]][Docs URL]
 
@@ -29,7 +29,7 @@ Drone state estimators @ LSY. Contains a model-free (smoothing) and a model-base
 
 ## Overview
 
-The estimators are written against the [Python Array API standard](https://data-apis.org/array-api/latest/), so they run with NumPy as well as JAX. With JAX, they can be batched over many drones and jit compiled. The dynamics models of the UKF come from [crazyflow](https://github.com/learnsyslab/crazyflow).
+The estimators are written against the [Python Array API standard](https://data-apis.org/array-api/latest/), so they run with NumPy as well as JAX. With JAX, they can be batched over many drones and jit compiled.
 
 The [documentation](https://learnsyslab.github.io/drone-estimators/) covers installation, usage, the ROS 2 node, and the API reference.
 
@@ -46,17 +46,10 @@ The ROS 2 node additionally needs a ROS 2 installation. The development setup be
 ```bash
 git clone https://github.com/learnsyslab/drone-estimators.git
 cd drone-estimators
-pixi install
 pixi shell
 ```
 
 The default environment contains ROS 2 Kilted and installs `drone_estimators` in editable mode. On first activation, it also clones and builds [motion_capture_tracking](https://github.com/learnsyslab/motion_capture_tracking) in `ros_ws/`.
-
-If you want to have `crazyflow` in editable mode as well, install it into the environment:
-
-```bash
-uv pip install -e ../crazyflow
-```
 
 Run the tests with:
 
