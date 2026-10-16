@@ -79,11 +79,12 @@ from drone_estimators.ros_nodes.ros2_connector import ROSConnector
 
 if __name__ == "__main__":  # The connector spawns processes, so guard the entry point
     rclpy.init()
-    connector = ROSConnector(estimator_names=["cf1"], tf_names=["gate1"], timeout=5.0)
+    connector = ROSConnector(estimator_names=["cf1"], tf_names=["cf1", "gate1"], timeout=5.0)
     pos, vel = connector.pos["cf1"], connector.vel["cf1"]  # Estimated state of cf1
-    gate_pos = connector.pos["gate1"]  # Pose of gate1 from /tf
+    cf1_raw_pos = connector.pos_raw["cf1"]  # Raw pose of cf1 from /tf
+    gate_pos = connector.pos_raw["gate1"]  # Raw pose of gate1 from /tf
     connector.close()
     rclpy.shutdown()
 ```
 
-Objects in `estimator_names` provide the full estimated state (`pos`, `quat`, `vel`, `ang_vel`, `forces`, `disturbance`), objects in `tf_names` only their pose from `/tf`. With `timeout`, the connector waits until it has received data for all objects and raises a `TimeoutError` otherwise. The connector can also publish commands with `cmd_topic` and `publish_cmd`.
+Objects in `estimator_names` provide the full estimated state (`pos`, `quat`, `vel`, `ang_vel`, `forces`, `disturbance`), objects in `tf_names` their raw pose from `/tf` (`pos_raw`, `quat_raw`). An object can be in both lists. Then, `is_outdated` is true if either its raw pose or its estimate is outdated. Since the estimator keeps publishing predictions when an object is occluded, add estimated objects to `tf_names` as well to detect lost tracking. With `timeout`, the connector waits until it has received data for all objects and raises a `TimeoutError` otherwise. The connector can also publish commands with `cmd_topic` and `publish_cmd`.
