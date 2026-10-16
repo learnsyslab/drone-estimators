@@ -116,7 +116,7 @@ class ROSConnector:
         self._vel = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 3)
         self._ang_vel = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 3)
         self._disturbance = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 6)
-        self._forces = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 4)
+        self._rotor_vel = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 4)
         self._times = ctx.Array("d", [float("nan")] * len(self.estimator_names))
         self._times_raw = ctx.Array("d", [float("nan")] * len(self.tf_names))
         # Note that times needs to be double, since time.time() might be a large number
@@ -141,7 +141,7 @@ class ROSConnector:
                     self._vel,
                     self._ang_vel,
                     self._disturbance,
-                    self._forces,
+                    self._rotor_vel,
                     self._times,
                     self.shutdown,
                 ),
@@ -228,10 +228,14 @@ class ROSConnector:
         return {n: disturbance[i] for i, n in enumerate(self.estimator_names)}
 
     @property
-    def forces(self) -> dict[str, NDArray]:
-        """The latest estimated forces data for all tracked objects."""
-        forces = np.asarray(self._forces, dtype=np.float32).reshape(-1, 4)
-        return {n: forces[i] for i, n in enumerate(self.estimator_names)}
+    def rotor_vel(self) -> dict[str, NDArray]:
+        """The latest estimated rotor velocities for all objects in `estimator_names`.
+
+        The values are the `rotor_vel` state of the dynamics model, e.g., the collective thrust (N)
+        in the first entry for the `so_rpy_rotor` models.
+        """
+        rotor_vel = np.asarray(self._rotor_vel, dtype=np.float32).reshape(-1, 4)
+        return {n: rotor_vel[i] for i, n in enumerate(self.estimator_names)}
 
     @property
     def times(self) -> dict[str, np.float64]:
@@ -322,7 +326,7 @@ def estimate_update(
     vel: list[SynchronizedArray],
     ang_vel: list[SynchronizedArray],
     disturbance: list[SynchronizedArray],
-    forces: list[SynchronizedArray],
+    rotor_vel: list[SynchronizedArray],
     times: list[Synchronized],
     shutdown: Event,
 ):
@@ -335,7 +339,7 @@ def estimate_update(
         vel: The shared memory arrays for the velocity data.
         ang_vel: The shared memory arrays for the angular velocity data.
         disturbance: The shared memory arrays for the disturbance data.
-        forces: The shared memory arrays for the forces data.
+        rotor_vel: The shared memory arrays for the rotor velocity data.
         times: The shared memory arrays for the time data.
         shutdown: The event to signal shutdown.
     """
@@ -363,9 +367,9 @@ def estimate_update(
             WrenchStamped, f"/drones/{name}/estimate/wrench", fn, qos_profile
         )
         subs.append(sub)
-        fn = partial(forces_callback, idx=names.index(name), forces=forces)
+        fn = partial(rotor_vel_callback, idx=names.index(name), rotor_vel=rotor_vel)
         sub = node.create_subscription(
-            Float64MultiArray, f"/drones/{name}/estimate/forces", fn, qos_profile
+            Float64MultiArray, f"/drones/{name}/estimate/rotor_vel", fn, qos_profile
         )
         subs.append(sub)
 
@@ -479,12 +483,12 @@ def disturbance_callback(data: WrenchStamped, idx: int, disturbance: Synchronize
     disturbance[idx * 6 : (idx + 1) * 6] = [force.x, force.y, force.z, torque.x, torque.y, torque.z]
 
 
-def forces_callback(data: Float64MultiArray, idx: int, forces: SynchronizedArray):
-    """Save the estimated forces from the estimator node.
+def rotor_vel_callback(data: Float64MultiArray, idx: int, rotor_vel: SynchronizedArray):
+    """Save the estimated rotor velocities from the estimator node.
 
     Args:
         data: The Float64MultiArray message.
         idx: The index of the object the force is referring to.
-        forces: The shared memory array for the forces.
+        rotor_vel: The shared memory array for the rotor velocities.
     """
-    forces[idx * 4 : (idx + 1) * 4] = data.data
+    rotor_vel[idx * 4 : (idx + 1) * 4] = data.data
