@@ -79,7 +79,7 @@ With `jit=True`, the filter functions are compiled with `jax.jit` on constructio
 
 ## Batching
 
-All estimators support leading batch dimensions, e.g., one estimator for a whole swarm. Pass the `batch_shape` on construction and arrays with a leading batch dimension afterwards. Drones without a new measurement, e.g., because they are occluded, are excluded from the correction with a `mask`. The time step of `predict` can also differ per drone. Batching works with NumPy, and can be combined with [JIT compilation](#jit-compilation) for faster estimation loops.
+All estimators support leading batch dimensions, e.g., one estimator for a whole swarm. Pass the `batch_shape` on construction and arrays with a leading batch dimension afterwards. Drones without a new measurement, e.g., because they are occluded, are excluded from the correction with a `mask`. The time step of `predict` can also differ per drone. It can be combined with [JIT compilation](#jit-compilation) for faster estimation loops.
 
 ```python
 import numpy as np
