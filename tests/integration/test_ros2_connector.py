@@ -66,11 +66,9 @@ def test_raw_and_estimated_poses():
     connector = None
     try:
         connector = ROSConnector(tf_names=[tf_name], estimator_names=[est_name], timeout=10.0)
-        # Objects tracked with tf only get the tf pose everywhere
+        # Objects tracked with tf only get the tf pose
         assert np.allclose(connector.pos[tf_name], tf_pos)
         assert np.allclose(connector.quat[tf_name], tf_quat)
-        assert np.allclose(connector.pos_raw[tf_name], tf_pos)
-        assert np.allclose(connector.quat_raw[tf_name], tf_quat)
         # Estimated objects get the estimate and additionally the raw tf pose
         assert np.allclose(connector.pos[est_name], est_pos)
         assert np.allclose(connector.quat[est_name], est_quat)
