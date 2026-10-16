@@ -47,9 +47,9 @@ The estimate is an `EstimatorData` with the fields `pos`, `quat`, `vel`, `ang_ve
 !!! note "Rotor velocities"
     `estimate_rotor_vel=True` requires a model with rotor dynamics, i.e., `first_principles`, `so_rpy_rotor`, or `so_rpy_rotor_drag`.
 
-## Legacy estimator
+## Differentiation-based filter
 
-The `StateEstimator` needs neither a model nor commands. It low pass filters the measurements and their numerical derivatives with five time constants for the position, velocity, acceleration, orientation, and angular velocity.
+The `DiffFilter` needs neither a model nor commands. It low pass filters the measurements and their numerical derivatives with five time constants for the position, velocity, acceleration, orientation, and angular velocity.
 
 ```python
 import jax
@@ -57,9 +57,9 @@ import numpy as np
 
 jax.config.update("jax_enable_x64", True)
 
-from drone_estimators.estimator_legacy import StateEstimator
+from drone_estimators.estimator_diff import DiffFilter
 
-estimator = StateEstimator((0.0001, 0.007, 0.09, 0.005, 0.07))  # Filter time constants
+estimator = DiffFilter((0.0001, 0.007, 0.09, 0.005, 0.07))  # Filter time constants
 estimator.set_state(np.zeros(3), np.array([0.0, 0.0, 0.0, 1.0]))
 for k in range(1, 200):
     pos = np.array([0.1 * k / 200, 0.0, 0.0])
@@ -72,10 +72,10 @@ print(estimate.pos, estimate.vel, estimate.ang_vel)
 
 ## JIT compilation
 
-With `jit=True`, the filter functions are compiled with `jax.jit` on construction, so the first measurement is not delayed by the compilation. The UKF defaults to `jit=False`, the legacy estimator to `jit=True`.
+With `jit=True`, the filter functions are compiled with `jax.jit` on construction, so the first measurement is not delayed by the compilation. The UKF defaults to `jit=False`, the differentiation-based filter to `jit=True`.
 
 !!! warning "64 bit precision"
-    The jitted estimators need 64 bit precision. The covariances of the UKF span many orders of magnitude, and the numerical derivatives of the legacy estimator amplify rounding errors. Call `jax.config.update("jax_enable_x64", True)` before creating a jitted estimator, otherwise it raises a `RuntimeError`.
+    The jitted estimators need 64 bit precision. The covariances of the UKF span many orders of magnitude, and the numerical derivatives of the differentiation-based filter amplify rounding errors. Call `jax.config.update("jax_enable_x64", True)` before creating a jitted estimator, otherwise it raises a `RuntimeError`.
 
 ## Batching
 

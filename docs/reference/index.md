@@ -5,7 +5,7 @@ This section is generated from the docstrings of the source code with [mkdocstri
 | Module | Description |
 |---|---|
 | `drone_estimators.estimator_kalman` | `KalmanFilter`, the Unscented Kalman Filter with crazyflow's dynamics models |
-| `drone_estimators.estimator_legacy` | `StateEstimator`, the model free (smoothing) estimator |
+| `drone_estimators.estimator_diff` | `DiffFilter`, the differentiation-based filter |
 | `drone_estimators.estimator` | `Estimator` base class |
 | `drone_estimators.filterpy` | Functional UKF predict and correct steps, adapted from [FilterPy](https://github.com/rlabbe/filterpy) |
 | `drone_estimators.structs` | `EstimatorData` and the UKF settings |
