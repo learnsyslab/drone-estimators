@@ -110,14 +110,16 @@ class ROSConnector:
         self._outdated_after = outdated_after
         # Create synchronized, shared arrays for all quantities
         ctx = mp.get_context("spawn")
-        # pos, quat, and times hold the raw poses of tf_names first, then the estimates
-        self._pos = ctx.Array("f", [float("nan")] * len(self.names) * 3)
-        self._quat = ctx.Array("f", [float("nan")] * len(self.names) * 4)
+        self._pos = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 3)
+        self._quat = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 4)
+        self._pos_raw = ctx.Array("f", [float("nan")] * len(self.tf_names) * 3)
+        self._quat_raw = ctx.Array("f", [float("nan")] * len(self.tf_names) * 4)
         self._vel = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 3)
         self._ang_vel = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 3)
         self._disturbance = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 6)
         self._forces = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 4)
-        self._times = ctx.Array("d", [float("nan")] * len(self.names))
+        self._times = ctx.Array("d", [float("nan")] * len(self.estimator_names))
+        self._times_raw = ctx.Array("d", [float("nan")] * len(self.tf_names))
         # Note that times needs to be double, since time.time() might be a large number
 
         self.shutdown = ctx.Event()
@@ -126,7 +128,7 @@ class ROSConnector:
         if self.tf_names:  # Create a process for the /tf callback
             tf_process = ctx.Process(
                 target=tf_update,
-                args=(self.tf_names, self._pos, self._quat, self._times, self.shutdown),
+                args=(self.tf_names, self._pos_raw, self._quat_raw, self._times_raw, self.shutdown),
             )
             self.processes.append(tf_process)
 
@@ -134,7 +136,6 @@ class ROSConnector:
             estimator_process = ctx.Process(
                 target=estimate_update,
                 args=(
-                    self.names,
                     self.estimator_names,
                     self._pos,
                     self._quat,
@@ -188,25 +189,25 @@ class ROSConnector:
     @property
     def pos(self) -> dict[str, NDArray]:
         """The latest estimated position data for all objects in `estimator_names`."""
-        pos = np.asarray(self._pos, dtype=np.float32).reshape(-1, 3)[len(self.tf_names) :]
+        pos = np.asarray(self._pos, dtype=np.float32).reshape(-1, 3)
         return {n: pos[i] for i, n in enumerate(self.estimator_names)}
 
     @property
     def quat(self) -> dict[str, NDArray]:
         """The latest estimated orientation data for all objects in `estimator_names`."""
-        quat = np.asarray(self._quat, dtype=np.float32).reshape(-1, 4)[len(self.tf_names) :]
+        quat = np.asarray(self._quat, dtype=np.float32).reshape(-1, 4)
         return {n: quat[i] for i, n in enumerate(self.estimator_names)}
 
     @property
     def pos_raw(self) -> dict[str, NDArray]:
         """The latest raw position data from `/tf` for all objects in `tf_names`."""
-        pos = np.asarray(self._pos, dtype=np.float32).reshape(-1, 3)
+        pos = np.asarray(self._pos_raw, dtype=np.float32).reshape(-1, 3)
         return {n: pos[i] for i, n in enumerate(self.tf_names)}
 
     @property
     def quat_raw(self) -> dict[str, NDArray]:
         """The latest raw orientation data from `/tf` for all objects in `tf_names`."""
-        quat = np.asarray(self._quat, dtype=np.float32).reshape(-1, 4)
+        quat = np.asarray(self._quat_raw, dtype=np.float32).reshape(-1, 4)
         return {n: quat[i] for i, n in enumerate(self.tf_names)}
 
     @property
@@ -236,17 +237,22 @@ class ROSConnector:
     @property
     def times(self) -> dict[str, np.float64]:
         """The times of the last received estimates for all objects in `estimator_names`."""
-        times = np.asarray(self._times, dtype=np.float64).reshape(-1)[len(self.tf_names) :]
+        times = np.asarray(self._times, dtype=np.float64).reshape(-1)
         return {n: times[i] for i, n in enumerate(self.estimator_names)}
+
+    @property
+    def times_raw(self) -> dict[str, np.float64]:
+        """The times of the last received raw poses for all objects in `tf_names`."""
+        times = np.asarray(self._times_raw, dtype=np.float64).reshape(-1)
+        return {n: times[i] for i, n in enumerate(self.tf_names)}
 
     @property
     def is_outdated(self) -> dict[str, np.bool]:
         """Whether the raw pose or the estimate of each tracked object is outdated."""
-        times = np.asarray(self._times, dtype=np.float64).reshape(-1)
-        is_outdated = times < time.time() - self._outdated_after
-        outdated = dict.fromkeys(self.names, False)
-        for i, n in enumerate(self.names):
-            outdated[n] = outdated[n] or is_outdated[i]
+        t_outdated = time.time() - self._outdated_after
+        outdated = {n: t < t_outdated for n, t in self.times_raw.items()}
+        for n, t in self.times.items():
+            outdated[n] = outdated.get(n, False) | (t < t_outdated)
         return outdated
 
     @property
@@ -255,9 +261,12 @@ class ROSConnector:
         # Check if drone is being tracked and if drone has already received updates
         pos_ready = not np.any(np.isnan(np.array(self._pos, dtype=np.float32)))
         quat_ready = not np.any(np.isnan(np.array(self._quat, dtype=np.float32)))
+        pos_raw_ready = not np.any(np.isnan(np.array(self._pos_raw, dtype=np.float32)))
+        quat_raw_ready = not np.any(np.isnan(np.array(self._quat_raw, dtype=np.float32)))
         vel_ready = not np.any(np.isnan(np.array(self._vel, dtype=np.float32)))
         ang_vel_ready = not np.any(np.isnan(np.array(self._ang_vel, dtype=np.float32)))
-        return pos_ready and quat_ready and vel_ready and ang_vel_ready
+        raw_ready = pos_raw_ready and quat_raw_ready
+        return pos_ready and quat_ready and raw_ready and vel_ready and ang_vel_ready
 
     def publish_cmd(self, value: NDArray):
         """Publish a command to ROS.
@@ -308,7 +317,6 @@ def tf_update(
 
 
 def estimate_update(
-    all_names: list[str],
     names: list[str],
     pos: list[SynchronizedArray],
     quat: list[SynchronizedArray],
@@ -322,8 +330,7 @@ def estimate_update(
     """Update the shared memory arrays with the latest pose data from the estimator node.
 
     Args:
-        all_names: The names of all objects that are being tracked.
-        names: The names of the objects only being tracked by the estimator.
+        names: The names of the objects being tracked by the estimator.
         pos: The shared memory arrays for the position data.
         quat: The shared memory arrays for the orientation data.
         vel: The shared memory arrays for the velocity data.
@@ -342,10 +349,7 @@ def estimate_update(
 
     subs = []
     for name in names:
-        # Pose (pos and quat) are shared with all_names, so the index changes! Since all_names can
-        # also contain the name as tf name, we search the estimator names at the end of all_names.
-        idx = all_names.index(name, len(all_names) - len(names))
-        fn = partial(pose_callback, idx=idx, pos=pos, quat=quat, times=times)
+        fn = partial(pose_callback, idx=names.index(name), pos=pos, quat=quat, times=times)
         sub = node.create_subscription(
             PoseStamped, f"/drones/{name}/estimate/pose", fn, qos_profile
         )
