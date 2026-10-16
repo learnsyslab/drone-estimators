@@ -8,7 +8,7 @@ $$
 
 ---
 
-Drone state estimators @ LSY. Contains model free (smoothing) and model based (EKF, UKF) state estimators for drones.
+Drone state estimators @ LSY. Contains model free and model based state estimators for drones.
 
 [![Python Version]][Python Version URL] [![PyPI]][PyPI URL] [![ROS 2]][ROS 2 URL] [![Ruff Check]][Ruff Check URL] [![Tests]][Tests URL] [![Docs]][Docs URL]
 
@@ -32,7 +32,7 @@ Drone state estimators @ LSY. Contains model free (smoothing) and model based (E
 
 ## Overview
 
-The estimators are written against the [Python Array API standard](https://data-apis.org/array-api/latest/), so they run with NumPy as well as JAX. With JAX, they can be batched over many drones and jit compiled.
+The estimators are written against the [Python Array API standard](https://data-apis.org/array-api/latest/), so they run with NumPy as well as JAX. They can be batched over many drones, and with JAX also jit compiled.
 
 The [documentation](https://learnsyslab.github.io/drone-estimators/) covers installation, usage, the ROS 2 node, and the API reference.
 
@@ -78,7 +78,13 @@ estimate = kf.correct(pos=np.array([0.0, 0.0, 0.001]), quat=np.array([0.0, 0.0, 
 print(estimate.pos, estimate.vel, estimate.ang_vel)
 ```
 
-To estimate many drones at once, pass a `batch_shape` and enable jit compilation:
+To estimate many drones at once, pass a `batch_shape`. This works with NumPy:
+
+```python
+kf = KalmanFilter(dt=1 / 200, model="so_rpy", config="cf2x_L250", batch_shape=(10,))
+```
+
+For faster estimation loops, jit compile the filter with JAX:
 
 ```python
 import jax
