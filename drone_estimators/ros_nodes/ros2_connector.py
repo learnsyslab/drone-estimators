@@ -286,7 +286,10 @@ class ROSConnector:
         """Unregister the ROS subscriptions and shut down the node."""
         self.shutdown.set()
         for p in self.processes:
-            p.join()
+            p.join(timeout=2.0)  # Destroying the ROS node can hang in rare cases (Fast DDS)
+            if p.is_alive():
+                p.kill()
+                p.join()
 
 
 def tf_update(
