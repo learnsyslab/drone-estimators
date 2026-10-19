@@ -98,10 +98,10 @@ def connect(fake: SimpleNamespace) -> Iterator[Callable[..., ROSConnector]]:
 def test_tf_names(fake: SimpleNamespace, connect: Callable[..., ROSConnector]):
     """Tests that objects in tf_names provide their raw poses."""
     connector = connect(tf_names=[fake.gate])
-    assert np.allclose(connector.pos_raw[fake.gate], GATE_POS)
-    assert np.allclose(connector.quat_raw[fake.gate], GATE_QUAT)
-    assert not np.isnan(connector.times_raw[fake.gate])
-    assert fake.gate not in connector.pos
+    assert np.allclose(connector.tf_pos[fake.gate], GATE_POS)
+    assert np.allclose(connector.tf_quat[fake.gate], GATE_QUAT)
+    assert not np.isnan(connector.tf_time[fake.gate])
+    assert fake.gate not in connector.est_pos
 
 
 @pytest.mark.integration
@@ -109,22 +109,22 @@ def test_estimator_names(fake: SimpleNamespace, connect: Callable[..., ROSConnec
     """Tests that objects in estimator_names provide their estimates."""
     connector = connect(estimator_names=[fake.drone])
     time.sleep(0.2)  # The timeout does not wait for rotor velocities
-    assert np.allclose(connector.pos[fake.drone], EST_POS)
-    assert np.allclose(connector.quat[fake.drone], EST_QUAT)
-    assert np.allclose(connector.vel[fake.drone], EST_VEL)
-    assert np.allclose(connector.rotor_vel[fake.drone], EST_ROTOR_VEL)
-    assert not np.isnan(connector.times[fake.drone])
-    assert fake.drone not in connector.pos_raw
+    assert np.allclose(connector.est_pos[fake.drone], EST_POS)
+    assert np.allclose(connector.est_quat[fake.drone], EST_QUAT)
+    assert np.allclose(connector.est_vel[fake.drone], EST_VEL)
+    assert np.allclose(connector.est_rotor_vel[fake.drone], EST_ROTOR_VEL)
+    assert not np.isnan(connector.est_time[fake.drone])
+    assert fake.drone not in connector.tf_pos
 
 
 @pytest.mark.integration
 def test_tf_and_estimator_names(fake: SimpleNamespace, connect: Callable[..., ROSConnector]):
     """Tests that objects can provide their raw poses and estimates at the same time."""
     connector = connect(tf_names=[fake.drone], estimator_names=[fake.drone])
-    assert np.allclose(connector.pos_raw[fake.drone], RAW_POS)
-    assert np.allclose(connector.quat_raw[fake.drone], RAW_QUAT)
-    assert np.allclose(connector.pos[fake.drone], EST_POS)
-    assert np.allclose(connector.quat[fake.drone], EST_QUAT)
+    assert np.allclose(connector.tf_pos[fake.drone], RAW_POS)
+    assert np.allclose(connector.tf_quat[fake.drone], RAW_QUAT)
+    assert np.allclose(connector.est_pos[fake.drone], EST_POS)
+    assert np.allclose(connector.est_quat[fake.drone], EST_QUAT)
 
 
 @pytest.mark.integration

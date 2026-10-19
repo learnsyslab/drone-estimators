@@ -47,9 +47,9 @@ class ROSConnector:
 
     The class supports two types of tracking:
 
-    * Raw pose tracking from `/tf` topics, available in `pos_raw` and `quat_raw`
+    * Raw pose tracking from `/tf` topics, available in `tf_pos` and `tf_quat`
     * Full state estimation including velocity, angular velocity, and disturbance forces from an
-      estimator node, available in `pos`, `quat`, `vel`, etc.
+      estimator node, available in `est_pos`, `est_quat`, `est_vel`, etc.
 
     An object can be tracked both ways at the same time.
 
@@ -60,7 +60,7 @@ class ROSConnector:
         >>> # Track drone position and state from estimator
         >>> conn = ROSConnector(estimator_names=["cf1"], cmd_topic="/drones/cf1/cmd", timeout=1.0)
         >>> # Access the latest position data
-        >>> drone_pos = conn.pos["cf1"]
+        >>> drone_pos = conn.est_pos["cf1"]
         >>> # Publish a command (non-blocking)
         >>> conn.publish_cmd(np.array([1.0, 0.0, 0.0, 0.0]))
         >>> # Clean up when done
@@ -109,16 +109,16 @@ class ROSConnector:
         self._outdated_after = outdated_after
         # Create synchronized, shared arrays for all quantities
         ctx = mp.get_context("spawn")
-        self._pos_raw = ctx.Array("f", [float("nan")] * len(self.tf_names) * 3)
-        self._quat_raw = ctx.Array("f", [float("nan")] * len(self.tf_names) * 4)
-        self._times_raw = ctx.Array("d", [float("nan")] * len(self.tf_names))
-        self._pos = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 3)
-        self._quat = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 4)
-        self._vel = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 3)
-        self._ang_vel = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 3)
-        self._disturbance = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 6)
-        self._rotor_vel = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 4)
-        self._times = ctx.Array("d", [float("nan")] * len(self.estimator_names))
+        self._tf_pos = ctx.Array("f", [float("nan")] * len(self.tf_names) * 3)
+        self._tf_quat = ctx.Array("f", [float("nan")] * len(self.tf_names) * 4)
+        self._tf_time = ctx.Array("d", [float("nan")] * len(self.tf_names))
+        self._est_pos = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 3)
+        self._est_quat = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 4)
+        self._est_vel = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 3)
+        self._est_ang_vel = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 3)
+        self._est_disturbance = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 6)
+        self._est_rotor_vel = ctx.Array("f", [float("nan")] * len(self.estimator_names) * 4)
+        self._est_time = ctx.Array("d", [float("nan")] * len(self.estimator_names))
         # Note that times needs to be double, since time.time() might be a large number
 
         self.shutdown = ctx.Event()
@@ -127,7 +127,7 @@ class ROSConnector:
         if self.tf_names:  # Create a process for the /tf callback
             tf_process = ctx.Process(
                 target=tf_update,
-                args=(self.tf_names, self._pos_raw, self._quat_raw, self._times_raw, self.shutdown),
+                args=(self.tf_names, self._tf_pos, self._tf_quat, self._tf_time, self.shutdown),
             )
             self.processes.append(tf_process)
 
@@ -136,13 +136,13 @@ class ROSConnector:
                 target=estimate_update,
                 args=(
                     self.estimator_names,
-                    self._pos,
-                    self._quat,
-                    self._vel,
-                    self._ang_vel,
-                    self._disturbance,
-                    self._rotor_vel,
-                    self._times,
+                    self._est_pos,
+                    self._est_quat,
+                    self._est_vel,
+                    self._est_ang_vel,
+                    self._est_disturbance,
+                    self._est_rotor_vel,
+                    self._est_time,
                     self.shutdown,
                 ),
             )
@@ -169,8 +169,8 @@ class ROSConnector:
                 time.sleep(0.01)  # Processes are spinning, so we can sleep here
             else:
                 self.shutdown.set()
-                tf_objects = [n for n, pos in self.pos_raw.items() if np.any(np.isnan(pos))]
-                estimator_objects = [n for n, pos in self.pos.items() if np.any(np.isnan(pos))]
+                tf_objects = [n for n, pos in self.tf_pos.items() if np.any(np.isnan(pos))]
+                estimator_objects = [n for n, pos in self.est_pos.items() if np.any(np.isnan(pos))]
                 missing_msg = ""
                 if any(tf_objects):
                     missing_msg += (
@@ -186,71 +186,71 @@ class ROSConnector:
                 )
 
     @property
-    def pos_raw(self) -> dict[str, NDArray]:
+    def tf_pos(self) -> dict[str, NDArray]:
         """The latest raw position data from `/tf` for all objects in `tf_names`."""
-        pos = np.asarray(self._pos_raw, dtype=np.float32).reshape(-1, 3)
+        pos = np.asarray(self._tf_pos, dtype=np.float32).reshape(-1, 3)
         return {n: pos[i] for i, n in enumerate(self.tf_names)}
 
     @property
-    def quat_raw(self) -> dict[str, NDArray]:
+    def tf_quat(self) -> dict[str, NDArray]:
         """The latest raw orientation data from `/tf` for all objects in `tf_names`."""
-        quat = np.asarray(self._quat_raw, dtype=np.float32).reshape(-1, 4)
+        quat = np.asarray(self._tf_quat, dtype=np.float32).reshape(-1, 4)
         return {n: quat[i] for i, n in enumerate(self.tf_names)}
 
     @property
-    def times_raw(self) -> dict[str, np.float64]:
+    def tf_time(self) -> dict[str, np.float64]:
         """The times of the last received raw poses for all objects in `tf_names`."""
-        times = np.asarray(self._times_raw, dtype=np.float64).reshape(-1)
+        times = np.asarray(self._tf_time, dtype=np.float64).reshape(-1)
         return {n: times[i] for i, n in enumerate(self.tf_names)}
 
     @property
-    def pos(self) -> dict[str, NDArray]:
+    def est_pos(self) -> dict[str, NDArray]:
         """The latest estimated position data for all objects in `estimator_names`."""
-        pos = np.asarray(self._pos, dtype=np.float32).reshape(-1, 3)
+        pos = np.asarray(self._est_pos, dtype=np.float32).reshape(-1, 3)
         return {n: pos[i] for i, n in enumerate(self.estimator_names)}
 
     @property
-    def quat(self) -> dict[str, NDArray]:
+    def est_quat(self) -> dict[str, NDArray]:
         """The latest estimated orientation data for all objects in `estimator_names`."""
-        quat = np.asarray(self._quat, dtype=np.float32).reshape(-1, 4)
+        quat = np.asarray(self._est_quat, dtype=np.float32).reshape(-1, 4)
         return {n: quat[i] for i, n in enumerate(self.estimator_names)}
 
     @property
-    def vel(self) -> dict[str, NDArray]:
+    def est_vel(self) -> dict[str, NDArray]:
         """The latest velocity data for all tracked objects."""
-        vel = np.asarray(self._vel, dtype=np.float32).reshape(-1, 3)
+        vel = np.asarray(self._est_vel, dtype=np.float32).reshape(-1, 3)
         return {n: vel[i] for i, n in enumerate(self.estimator_names)}
 
     @property
-    def ang_vel(self) -> dict[str, NDArray]:
+    def est_ang_vel(self) -> dict[str, NDArray]:
         """The latest angular velocity data for all tracked objects."""
-        ang_vel = np.asarray(self._ang_vel, dtype=np.float32).reshape(-1, 3)
+        ang_vel = np.asarray(self._est_ang_vel, dtype=np.float32).reshape(-1, 3)
         return {n: ang_vel[i] for i, n in enumerate(self.estimator_names)}
 
     @property
-    def disturbance(self) -> dict[str, NDArray]:
+    def est_disturbance(self) -> dict[str, NDArray]:
         """The latest disturbance data for all tracked objects."""
-        disturbance = np.asarray(self._disturbance, dtype=np.float32).reshape(-1, 6)
+        disturbance = np.asarray(self._est_disturbance, dtype=np.float32).reshape(-1, 6)
         return {n: disturbance[i] for i, n in enumerate(self.estimator_names)}
 
     @property
-    def rotor_vel(self) -> dict[str, NDArray]:
+    def est_rotor_vel(self) -> dict[str, NDArray]:
         """The latest estimated rotor velocities for all objects in `estimator_names`."""
-        rotor_vel = np.asarray(self._rotor_vel, dtype=np.float32).reshape(-1, 4)
+        rotor_vel = np.asarray(self._est_rotor_vel, dtype=np.float32).reshape(-1, 4)
         return {n: rotor_vel[i] for i, n in enumerate(self.estimator_names)}
 
     @property
-    def times(self) -> dict[str, np.float64]:
+    def est_time(self) -> dict[str, np.float64]:
         """The times of the last received estimates for all objects in `estimator_names`."""
-        times = np.asarray(self._times, dtype=np.float64).reshape(-1)
+        times = np.asarray(self._est_time, dtype=np.float64).reshape(-1)
         return {n: times[i] for i, n in enumerate(self.estimator_names)}
 
     @property
     def is_outdated(self) -> dict[str, np.bool]:
         """Whether the raw pose or the estimate of each tracked object is outdated."""
         t_outdated = time.time() - self._outdated_after
-        outdated = {n: t < t_outdated for n, t in self.times_raw.items()}
-        for n, t in self.times.items():
+        outdated = {n: t < t_outdated for n, t in self.tf_time.items()}
+        for n, t in self.est_time.items():
             outdated[n] = outdated.get(n, False) | (t < t_outdated)
         return outdated
 
@@ -258,14 +258,14 @@ class ROSConnector:
     def active(self) -> bool:
         """Check if each object has received an update already."""
         # Check if drone is being tracked and if drone has already received updates
-        pos_raw_ready = not np.any(np.isnan(np.array(self._pos_raw, dtype=np.float32)))
-        quat_raw_ready = not np.any(np.isnan(np.array(self._quat_raw, dtype=np.float32)))
-        pos_ready = not np.any(np.isnan(np.array(self._pos, dtype=np.float32)))
-        quat_ready = not np.any(np.isnan(np.array(self._quat, dtype=np.float32)))
-        vel_ready = not np.any(np.isnan(np.array(self._vel, dtype=np.float32)))
-        ang_vel_ready = not np.any(np.isnan(np.array(self._ang_vel, dtype=np.float32)))
-        raw_ready = pos_raw_ready and quat_raw_ready
-        return raw_ready and pos_ready and quat_ready and vel_ready and ang_vel_ready
+        tf_pos_ready = not np.any(np.isnan(np.array(self._tf_pos, dtype=np.float32)))
+        tf_quat_ready = not np.any(np.isnan(np.array(self._tf_quat, dtype=np.float32)))
+        est_pos_ready = not np.any(np.isnan(np.array(self._est_pos, dtype=np.float32)))
+        est_quat_ready = not np.any(np.isnan(np.array(self._est_quat, dtype=np.float32)))
+        est_vel_ready = not np.any(np.isnan(np.array(self._est_vel, dtype=np.float32)))
+        est_ang_vel_ready = not np.any(np.isnan(np.array(self._est_ang_vel, dtype=np.float32)))
+        tf_ready = tf_pos_ready and tf_quat_ready
+        return tf_ready and est_pos_ready and est_quat_ready and est_vel_ready and est_ang_vel_ready
 
     def publish_cmd(self, value: NDArray):
         """Publish a command to ROS.

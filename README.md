@@ -117,6 +117,6 @@ from drone_estimators.ros import ROSConnector
 
 rclpy.init()
 conn = ROSConnector(estimator_names=["cf1"], timeout=10.0)
-print(conn.pos["cf1"], conn.vel["cf1"])
+print(conn.est_pos["cf1"], conn.est_vel["cf1"])
 conn.close()
 ```
