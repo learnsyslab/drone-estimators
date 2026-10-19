@@ -12,7 +12,7 @@ from uuid import uuid4
 import numpy as np
 import pytest
 
-# Keep the test traffic on this machine, see ros2_node.py
+# Keep the test traffic on this machine, see node.py
 os.environ["ROS_AUTOMATIC_DISCOVERY_RANGE"] = "LOCALHOST"
 
 import rclpy
@@ -21,7 +21,7 @@ from rclpy.executors import SingleThreadedExecutor
 from std_msgs.msg import Float64MultiArray
 from tf2_msgs.msg import TFMessage
 
-from drone_estimators.ros_nodes.ros2_connector import ROSConnector
+from drone_estimators.ros import ROSConnector
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -48,7 +48,7 @@ def fake() -> Iterator[SimpleNamespace]:
     fake = SimpleNamespace(gate=f"gate_{uuid4().hex[:8]}", drone=f"cf_{uuid4().hex[:8]}")
     fake.drone_tracked = True
     rclpy.init()
-    node = rclpy.create_node("test_ros2_connector_" + uuid4().hex)
+    node = rclpy.create_node("test_connector_" + uuid4().hex)
     tf_pub = node.create_publisher(TFMessage, "/tf", 10)
     topic = f"/drones/{fake.drone}/estimate"
     pose_pub = node.create_publisher(PoseStamped, f"{topic}/pose", 10)
