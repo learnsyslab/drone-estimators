@@ -50,7 +50,7 @@ from visualization_msgs.msg import MarkerArray
 
 from drone_estimators.estimator_diff import DiffFilter
 from drone_estimators.estimator_kalman import KalmanFilter
-from drone_estimators.ros_nodes.ros2_utils import (
+from drone_estimators.ros.utils import (
     append_measurement,
     append_state,
     create_array,
@@ -696,7 +696,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.settings is None:
-        path = Path(__file__).parents[1] / "ros_nodes/estimators.toml"
+        path = Path(__file__).parent / "estimators.toml"
     else:
         path = args.settings
     with open(path, "r") as f:

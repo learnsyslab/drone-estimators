@@ -10,7 +10,7 @@ import pytest
     [
         "drone_estimators.estimator_kalman",
         "drone_estimators.estimator_diff",
-        "drone_estimators.ros_nodes.ros2_node",
+        "drone_estimators.ros.node",
     ],
 )
 def test_import_first(module: str):

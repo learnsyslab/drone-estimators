@@ -99,12 +99,12 @@ The differentiation-based filter is `DiffFilter` in `drone_estimators.estimator_
 ### ROS 2 node
 
 ```bash
-python -m drone_estimators.ros_nodes.ros2_node --drone_name cf1 --estimator_type ukf
-python -m drone_estimators.ros_nodes.ros2_node --drone_name cf1 --estimator_type diff
-python -m drone_estimators.ros_nodes.ros2_node --settings path/to/estimators.toml
+python -m drone_estimators.ros.node --drone_name cf1 --estimator_type ukf
+python -m drone_estimators.ros.node --drone_name cf1 --estimator_type diff
+python -m drone_estimators.ros.node --settings path/to/estimators.toml
 ```
 
-The settings are read from [`estimators.toml`](drone_estimators/ros_nodes/estimators.toml). To estimate several drones, add one `[estimatorX]` section per drone and pass your file with `--settings`. Drones with identical settings are batched into one estimator.
+The settings are read from [`estimators.toml`](drone_estimators/ros/estimators.toml). To estimate several drones, add one `[estimatorX]` section per drone and pass your file with `--settings`. Drones with identical settings are batched into one estimator.
 
 The node subscribes to `/tf` (e.g., from [motion_capture_tracking](https://github.com/learnsyslab/motion_capture_tracking)) and to `/drones/<name>/command` (roll, pitch, yaw in deg and thrust in PWM, needed by the UKF). It publishes the estimates to `/drones/<name>/estimate/{pose,twist,wrench,rotor_vel}`. The node only communicates with nodes on the same machine (`ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`).
 
@@ -113,7 +113,7 @@ To read the estimates in Python without blocking, use the `ROSConnector`:
 ```python
 import rclpy
 
-from drone_estimators.ros_nodes.ros2_connector import ROSConnector
+from drone_estimators.ros import ROSConnector
 
 rclpy.init()
 conn = ROSConnector(estimator_names=["cf1"], timeout=10.0)

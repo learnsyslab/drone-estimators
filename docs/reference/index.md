@@ -10,6 +10,6 @@ This section is generated from the docstrings of the source code with [mkdocstri
 | `drone_estimators.filterpy` | Functional EKF and UKF predict and correct steps, adapted from [FilterPy](https://github.com/rlabbe/filterpy) |
 | `drone_estimators.structs` | `EstimatorData` and the EKF and UKF settings |
 | `drone_estimators.utils` | Batching, dynamics, and integration helpers |
-| `drone_estimators.ros_nodes` | The ROS 2 estimator node, the `ROSConnector`, and message utilities |
+| `drone_estimators.ros` | The ROS 2 estimator node, the `ROSConnector`, and message utilities |
 
 Navigate the full reference using the sidebar.

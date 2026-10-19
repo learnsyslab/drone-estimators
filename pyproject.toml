@@ -30,7 +30,7 @@ dependencies = [
 find = {}
 
 [tool.setuptools.package-data]
-drone_estimators = ["ros_nodes/*.toml"]
+drone_estimators = ["ros/*.toml"]
 
 [tool.pytest.ini_options]
 markers = ["unit", "integration", "render"]
