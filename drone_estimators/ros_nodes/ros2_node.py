@@ -251,6 +251,10 @@ class MPEstimator:
 
         k = 0
         global_time = time.perf_counter()
+        # time.sleep overshoots the requested duration. The overshoot of the previous sleep is
+        # measured at the start of the next cycle and compensated, low pass filtered to smooth it
+        sleep_overshoot = 0.0
+        sleep_end = None  # Expected end of the previous sleep, None if the cycle did not sleep
 
         try:
             # self.logger.info(f"{self.estimator.data.pos=}")
@@ -349,16 +353,18 @@ class MPEstimator:
                                     self.data_meas[i], tf_timestamp[i], pos[i], quat[i], None
                                 )
 
-                # if k % 100 == 0:
-                #     self.logger.info(f"{estimator_data.dist_f=}")
-
-                remaining = (
-                    (1 / self.frequency) - (time.time() - loop_start_time) - 1.25 * 1e-4
-                )  # TODO remove magic number, replace with "controller"
                 if k % 1000 == 999:
                     self.logger.info(f"Freq: {k / (time.perf_counter() - global_time)}")
                 k += 1
+
+                # Sleep until next cycle
+                if sleep_end is not None:  # Overshoot of the last sleep until this cycle started
+                    overshoot = np.clip(loop_start_time - sleep_end, 0.0, 1e-3)
+                    sleep_overshoot += 0.01 * (overshoot - sleep_overshoot)
+                sleep_end = None
+                remaining = (1 / self.frequency) - (time.time() - loop_start_time) - sleep_overshoot
                 if remaining > 0:
+                    sleep_end = time.time() + remaining
                     time.sleep(remaining)
         except KeyboardInterrupt:
             self._stop_event.set()
