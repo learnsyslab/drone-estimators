@@ -251,6 +251,10 @@ class MPEstimator:
 
         k = 0
         global_time = time.perf_counter()
+        # The loop sleeps until an absolute deadline that advances by one period each cycle, so a
+        # slow cycle is followed by a shorter sleep instead of delaying all subsequent cycles.
+        period = 1 / self.frequency
+        next_deadline = time.time() + period
         # time.sleep overshoots the requested duration. The overshoot of the previous sleep is
         # measured at the start of the next cycle and compensated, low pass filtered to smooth it
         sleep_overshoot = 0.0
@@ -353,18 +357,23 @@ class MPEstimator:
                                     self.data_meas[i], tf_timestamp[i], pos[i], quat[i], None
                                 )
 
-                if k % 1000 == 999:
-                    self.logger.info(f"Freq: {k / (time.perf_counter() - global_time)}")
                 k += 1
+                if k == 1000:
+                    self.logger.info(f"Freq: {k / (time.perf_counter() - global_time)}")
+                    k, global_time = 0, time.perf_counter()
 
                 # Sleep until next cycle
                 if sleep_end is not None:  # Overshoot of the last sleep until this cycle started
                     overshoot = np.clip(loop_start_time - sleep_end, 0.0, 1e-3)
-                    sleep_overshoot += 0.01 * (overshoot - sleep_overshoot)
+                    sleep_overshoot += 0.1 * (overshoot - sleep_overshoot)
                 sleep_end = None
-                remaining = (1 / self.frequency) - (time.time() - loop_start_time) - sleep_overshoot
+                now = time.time()
+                if now > next_deadline + 0.1:  # Fell far behind (e.g. jit compile), do not catch up
+                    next_deadline = now
+                remaining = next_deadline - now - sleep_overshoot
+                next_deadline += period
                 if remaining > 0:
-                    sleep_end = time.time() + remaining
+                    sleep_end = now + remaining
                     time.sleep(remaining)
         except KeyboardInterrupt:
             self._stop_event.set()
