@@ -98,7 +98,7 @@ class DiffFilter(object):
     def __init__(
         self, filter_parameters: tuple, batch_shape: tuple[int, ...] = (), jit: bool = True
     ):
-        """TODO."""
+        """Create the filter and compile the correction step if jit is enabled."""
         # The numeric derivatives divide by dt (twice for the acceleration). In 32 bit, this
         # amplifies the rounding errors of the measurements too much.
         if jit and not jax.config.jax_enable_x64:

@@ -142,7 +142,19 @@ def make_arrow_marker_from_vector(
     color_rgba: Array = [1, 1, 1, 1],
     scale: float = 1.0,
 ) -> Marker:
-    """TODO."""
+    """Create an arrow marker for visualization in RViz.
+
+    Args:
+        id: The id of the marker.
+        ns: The namespace of the marker.
+        start_pos: The start position of the arrow.
+        vector: The vector the arrow points along.
+        color_rgba: The color of the arrow.
+        scale: The scaling of the vector.
+
+    Returns:
+        The arrow marker from start_pos to start_pos + vector * scale.
+    """
     marker = Marker()
     marker.id = id
     marker.ns = ns

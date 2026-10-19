@@ -196,7 +196,7 @@ class MPEstimator:
                         "The differentiation-based filter does not support force or torque "
                         "estimation!"
                     )
-            case "ukf" | "ekf":
+            case "ekf" | "ukf":
                 self.input_needed = True
                 # The commands are converted from PWM to N like the onboard controller does
                 drone = Drone(self.settings.drone_config)
@@ -577,7 +577,7 @@ class MPEstimator:
         node.destroy_node()
 
     def close(self):
-        """TODO."""
+        """Stop the subscriber and publisher processes and save the data if enabled."""
         self.logger.info(f"Estimator {self.drone_names} shutdown")
         self._stop_event.set()
         self._sub_process.join()
@@ -597,7 +597,12 @@ class MPEstimator:
 
 
 def launch_estimators(estimators: dict):
-    """TODO."""
+    """Launch one process per batch of estimators and block until a keyboard interrupt.
+
+    Args:
+        estimators: The settings of each estimator, keyed by name. Estimators with identical
+            settings (except for the drone name) are run as one batch.
+    """
     processes = []
     seen_drone_names = []
     ctx = mp.get_context("spawn")
@@ -647,7 +652,12 @@ def launch_estimators(estimators: dict):
 
 
 def launch_node(settings: Munch, stop_event: Event):
-    """TODO."""
+    """Run an estimator node until the stop event is set.
+
+    Args:
+        settings: The estimator settings, including the names of all drones in the batch.
+        stop_event: Event that stops the estimator and its processes once set.
+    """
     rclpy.init()
     estimator = MPEstimator(settings, stop_event=stop_event)
     try:
@@ -665,7 +675,7 @@ if __name__ == "__main__":
     parser.add_argument("--drone_name", default=None, help="Overwrite drone_name in estimator1")
     parser.add_argument(
         "--estimator_type",
-        choices=["diff", "ukf", "ekf"],
+        choices=["diff", "ekf", "ukf"],
         help="Overwrite estimator type in estimator1",
     )
     args = parser.parse_args()

@@ -16,7 +16,7 @@ DIFF_PARAMS = (0.0001, 0.007, 0.09, 0.005, 0.07)  # As in the ROS node
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("estimator_type", ["diff", "ukf", "ekf"])
+@pytest.mark.parametrize("estimator_type", ["diff", "ekf", "ukf"])
 def test_append_state(estimator_type: str):
     """Tests if the estimates of all estimators can be saved."""
     pos, quat = np.array([0.0, 0.0, 1.0]), np.array([0.0, 0.0, 0.0, 1.0])

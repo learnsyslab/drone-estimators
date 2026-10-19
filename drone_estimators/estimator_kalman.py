@@ -29,28 +29,28 @@ if TYPE_CHECKING:
 
 
 class KalmanFilter(Estimator):
-    """Unscented or extended Kalman Filter class that wraps the filterPY toolbox."""
+    """Extended or unscented Kalman Filter class that wraps the filterPY toolbox."""
 
     def __init__(
         self,
         dt: float,
         model: str = "so_rpy",
         config: str = "cf2x_L250",
-        filter_type: Literal["UKF", "EKF"] = "UKF",
+        filter_type: Literal["EKF", "UKF"] = "UKF",
         estimate_rotor_vel: bool = False,
         estimate_dist_f: bool = False,
         estimate_dist_t: bool = False,
         initial_obs: dict[str, Array] | None = None,
         batch_shape: tuple[int, ...] = (),
         jit: bool = False,
-    ):  # TODO give obs and info # analytical_mel_att
+    ):
         """Initialize basic parameters.
 
         Args:
             dt: Time step between callings.
             model: The name of the model that is to be used.
             config: The setup configuration of the drone.
-            filter_type: The type of Kalman filter, "UKF" or "EKF". The EKF uses the Jacobian
+            filter_type: The type of Kalman filter, "EKF" or "UKF". The EKF uses the Jacobian
                 of the dynamics at hover.
             estimate_rotor_vel: If the rotor speeds should be estimated, defaults to False.
             estimate_dist_f: If the disturbance forces should be estimated, defaults to False.
@@ -59,11 +59,8 @@ class KalmanFilter(Estimator):
             batch_shape: The batch dimensions, e.g., (n_drones,). All arrays have leading batch dimensions.
             jit: If the filter should be jit compiled with jax. Requires 64 bit precision.
         """
-        assert filter_type in ("UKF", "EKF"), f"Filter type {filter_type} is not implemented."
         fx = dynamics_function(model, config)
         hx = observation_function
-        # fx = jax.jit(dynamics_numeric(model, config))
-        # hx = jax.jit(observation_function)
 
         dim_x = 13
         if estimate_rotor_vel:
@@ -86,7 +83,6 @@ class KalmanFilter(Estimator):
         self.batch_shape = batch_shape
 
         dim_x = EstimatorData.get_state_dim(self.data)
-        # print(f"dim_x={dim_x}")
 
         Q, R = self.create_covariance_matrices(
             dim_x=dim_x,
@@ -98,21 +94,24 @@ class KalmanFilter(Estimator):
             varR_quat=5e-9,
             dt=dt,
         )
-        # Q = self.create_Q(
-        #     dim_x=dim_x, varQ_pos=1e-6, varQ_quat=1e-6, varQ_vel=1e-3, varQ_ang_vel=1e-2, dt=dt
-        # )
-        # R = self.create_R(dim_z=dim_z, varR_pos=1e-8, varR_quat=3e-6, dt=dt)
 
-        if filter_type == "UKF":
-            sigma_settings = SigmaPointsSettings.create(n=dim_x, alpha=1e-3, beta=2.0, kappa=0.0)
-            self.settings = UKFSettings.create(SPsettings=sigma_settings, Q=Q, R=R, fx=fx, hx=hx)
-            predict, correct, predict_correct = ukf_predict, ukf_correct, ukf_predict_correct
-        else:
-            A, H = hover_jacobians(
-                model, config, estimate_rotor_vel, estimate_dist_f, estimate_dist_t
-            )
-            self.settings = EKFSettings.create(A=A, H=H, Q=Q, R=R, fx=fx, hx=hx)
-            predict, correct, predict_correct = ekf_predict, ekf_correct, ekf_predict_correct
+        match filter_type:
+            case "EKF":
+                A, H = hover_jacobians(
+                    model, config, estimate_rotor_vel, estimate_dist_f, estimate_dist_t
+                )
+                self.settings = EKFSettings.create(A=A, H=H, Q=Q, R=R, fx=fx, hx=hx)
+                predict, correct, predict_correct = ekf_predict, ekf_correct, ekf_predict_correct
+            case "UKF":
+                sigma_settings = SigmaPointsSettings.create(
+                    n=dim_x, alpha=1e-3, beta=2.0, kappa=0.0
+                )
+                self.settings = UKFSettings.create(
+                    SPsettings=sigma_settings, Q=Q, R=R, fx=fx, hx=hx
+                )
+                predict, correct, predict_correct = ukf_predict, ukf_correct, ukf_predict_correct
+            case _:
+                raise ValueError(f"Filter type {filter_type} is not implemented.")
 
         self._predict = partial(predict, settings=self.settings)
         self._correct = partial(correct, settings=self.settings)
@@ -140,6 +139,10 @@ class KalmanFilter(Estimator):
         """Sets pos and quat of the state to the given values and reduces the covariance value.
 
         With aggressive Q and R values, this needs to be called in the beginning. Otherwise the estimator might fail.
+
+        Args:
+            pos: The position the state is set to.
+            quat: The quaternion the state is set to.
         """
         self.data = self.data.replace(pos=pos, quat=quat)
         dim_x = EstimatorData.as_state_array(self.data).shape[-1]
@@ -164,6 +167,22 @@ class KalmanFilter(Estimator):
         We assume that the linear elements (pos, vel) are correlated
         and the rotational elements (quat, ang_vel) are.
         For more information consult the filterpy library.
+
+        Args:
+            dim_x: The dimension of the state.
+            dim_z: The dimension of the measurement.
+            varQ_pos: The variance of the position and velocity process noise.
+            varQ_quat: The variance of the quaternion and angular velocity process noise.
+            varQ_rotor_vel: The variance of the rotor velocity process noise, if estimated.
+            varR_pos: The variance of the position measurement noise.
+            varR_quat: The variance of the quaternion measurement noise.
+            dt: The time step.
+            varQ_dist_f: The variance of the disturbance force process noise, if estimated.
+            varQ_dist_t: The variance of the disturbance torque process noise, if estimated.
+
+        Returns:
+            The process noise covariance Q of shape (dim_x, dim_x) and the measurement noise
+            covariance R of shape (dim_z, dim_z).
         """
         ### Set process noise covariance (tunable). Uncertainty in the dynamics. High Q -> less trust in model
         Q = np.eye(dim_x)
@@ -209,7 +228,6 @@ class KalmanFilter(Estimator):
             Q[i : i + 4, 10:13] = (
                 Q_forces[1, 0] * 0.04
             )  # forces <-> ang_vel, times arm length (F=rxl)
-            # Q[i : i + 4] *= varQ_rotor_vel  # TODO move index as in dataclass example and make optional
             i = i + 4
 
         # External forces and torques TODO Maybe make x and v dependend on F uncertainty and same for torque
@@ -228,59 +246,19 @@ class KalmanFilter(Estimator):
 
         return Q, R
 
-    def create_Q(
-        self,
-        dim_x: int,
-        varQ_pos: float,
-        varQ_quat: float,
-        varQ_vel: float,
-        varQ_ang_vel: float,
-        dt: float,
-        varQ_rotor_vel: float = 1e-1,
-        varQ_dist_f: float = 1e-9,
-        varQ_dist_t: float = 1e-12,
-    ) -> Array:
-        """TODO."""
-        Q = np.eye(dim_x)
-        # TODO remove, just for testing
-        Q[0:3] *= varQ_pos
-        Q[3:7] *= varQ_quat
-        Q[7:10] *= varQ_vel
-        Q[10:13] *= varQ_ang_vel
-        i = 13
-        if self.data.rotor_vel is not None:
-            Q[i : i + 4] *= varQ_rotor_vel
-            i = i + 4
-        if self.data.dist_f is not None:
-            Q[i : i + 3, i : i + 3] *= varQ_dist_f  # Force
-            i = i + 3
-        if self.data.dist_t is not None:
-            Q[i : i + 3, i : i + 3] *= varQ_dist_t  # Torque
-        return Q
-
-    def create_R(self, dim_z: int, varR_pos: float, varR_quat: float, dt: float) -> Array:
-        """TODO."""
-        ### Set measurement noise covariance (tunable). Uncertaints in the measurements. High R -> less trust in measurements
-        R = np.eye(dim_z)  # Assuming uncorrelated noise
-        # very low noise on the position ("mm precision" => even less noise)
-        R[:3, :3] = R[:3, :3] * varR_pos
-        # "high" measurements noise on the angles, estimate: 0.01 constains all values => std=3e-3 TODO look at new quat measurements
-        R[3:, 3:] = R[3:, 3:] * varR_quat
-        return R
-
     def step(
         self, pos: Array, quat: Array, dt: float, command: Array | None = None
     ) -> EstimatorData:
-        """Steps the UKF by one. Doing one prediction and correction step.
+        """Steps the filter by one. Doing one prediction and correction step.
 
         Args:
-            pos: Latest observation of the position
-            quat: Latest observation of the quaternion
-            dt: Optional, time step size. If not specified, default time is used
-            command: Optional, latest input to the system
+            pos: Latest observation of the position.
+            quat: Latest observation of the quaternion.
+            dt: Time step size. Only batch elements with a positive dt are updated.
+            command: Optional, latest input to the system.
 
-        Return:
-            New state prediction
+        Returns:
+            New state estimate.
         """
         # Check if time step is positive. Only batch elements with a positive time step are updated
         dt = np.broadcast_to(np.asarray(dt, dtype=np.float64), self.batch_shape)
@@ -295,15 +273,20 @@ class KalmanFilter(Estimator):
         # dt hast to be vectorized to work properly in jax
         self.data = self.data.replace(z=np.concat((pos, quat), axis=-1), dt=dt)
 
-        # if self.data.dt > 0:  # TODO make dt check more elegant and catch all errors
-        # self.data = ukf_predict(self.data, self.settings)
-        # self.data = ukf_predict(self.data, self.settings)
         self.data = self._predict_correct(self.data, mask=dt > 0)
 
         return self.data
 
     def predict(self, dt: float, command: Array | None = None) -> EstimatorData:
-        """TODO."""
+        """Predict the state by one time step. Only batch elements with a positive dt are updated.
+
+        Args:
+            dt: Time step size.
+            command: Optional, latest input to the system.
+
+        Returns:
+            New state prediction.
+        """
         # Check if time step is positive. Only batch elements with a positive time step are updated
         dt = np.broadcast_to(np.asarray(dt, dtype=np.float64), self.batch_shape)
         if not np.any(dt > 0):
@@ -324,7 +307,17 @@ class KalmanFilter(Estimator):
     def correct(
         self, pos: Array, quat: Array, command: Array | None = None, mask: Array | None = None
     ) -> EstimatorData:
-        """TODO. If given, only batch elements where mask is True are corrected."""
+        """Correct the state with the latest observation.
+
+        Args:
+            pos: Latest observation of the position.
+            quat: Latest observation of the quaternion.
+            command: Optional, latest input to the system.
+            mask: Optional, only batch elements where mask is True are corrected.
+
+        Returns:
+            New state estimate.
+        """
         # Update the input
         if command is not None:
             self.set_input(command)
@@ -332,8 +325,6 @@ class KalmanFilter(Estimator):
         # Update observation and dt
         # dt hast to be vectorized to work properly in jax
         self.data = self.data.replace(z=np.concat((pos, quat), axis=-1))
-
-        # print(f"{quat=}, {self.data.quat=}, {self.data.u[-2]=}")
 
         self.data = self._correct(self.data, mask=mask)
 

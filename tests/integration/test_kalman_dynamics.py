@@ -21,7 +21,7 @@ DYNAMICS_DRONES = [(d, drone) for d in available_dynamics for drone in supported
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("filter_type", ["UKF", "EKF"])
+@pytest.mark.parametrize("filter_type", ["EKF", "UKF"])
 @pytest.mark.parametrize("dynamics, drone", DYNAMICS_DRONES)
 def test_kalman(dynamics: str, drone: str, filter_type: str):
     """Tests if the Kalman filter can be imported and stepped."""
@@ -36,7 +36,7 @@ def test_kalman(dynamics: str, drone: str, filter_type: str):
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("filter_type", ["UKF", "EKF"])
+@pytest.mark.parametrize("filter_type", ["EKF", "UKF"])
 @pytest.mark.parametrize("jit", [False, True])
 def test_kalman_batched(jit: bool, filter_type: str):
     """Tests that a batched Kalman filter matches one (numpy) filter per drone.
@@ -79,7 +79,7 @@ def test_kalman_batched(jit: bool, filter_type: str):
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("filter_type", ["UKF", "EKF"])
+@pytest.mark.parametrize("filter_type", ["EKF", "UKF"])
 def test_kalman_tracking(filter_type: str):
     """Tests that the Kalman filter tracks a drone flying with the same dynamics.
 

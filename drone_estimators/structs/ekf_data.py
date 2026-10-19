@@ -40,5 +40,17 @@ class EKFSettings:
         ],
         hx: Callable[[Array, Array, Array, Array, Array, Array, Array | None, Array | None], Array],
     ) -> EKFSettings:
-        """Create the settings from the Jacobians, the noise covariances, and the model."""
+        """Create the settings from the Jacobians, the noise covariances, and the model.
+
+        Args:
+            A: The Jacobian of the continuous dynamics w.r.t. the state.
+            H: The Jacobian of the observation function w.r.t. the state.
+            Q: The process noise covariance.
+            R: The measurement noise covariance.
+            fx: The continuous dynamics function.
+            hx: The observation function.
+
+        Returns:
+            The settings.
+        """
         return cls(A, H, Q, R, fx, hx)
