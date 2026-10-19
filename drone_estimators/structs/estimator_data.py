@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class EstimatorData:
-    """TODO."""
+    """State, covariance, sigma points, input, and measurement of an estimator."""
 
     pos: Array
     quat: Array
@@ -41,7 +41,19 @@ class EstimatorData:
         dim_z: int = 7,
         batch_shape: tuple[int, ...] = (),
     ) -> EstimatorData:
-        """TODO."""
+        """Create the initial state with zeros and identity covariance.
+
+        Args:
+            rotor_vel: If the rotor velocities are part of the state.
+            dist_f: If the disturbance forces are part of the state.
+            dist_t: If the disturbance torques are part of the state.
+            dim_u: The dimension of the input.
+            dim_z: The dimension of the measurement.
+            batch_shape: The batch dimensions, e.g., (n_drones,).
+
+        Returns:
+            The initial state.
+        """
         pos = np.zeros((*batch_shape, 3))
         quat = np.tile([0.0, 0.0, 0.0, 1.0], (*batch_shape, 1))
         vel = np.zeros((*batch_shape, 3))
@@ -99,7 +111,20 @@ class EstimatorData:
         dist_f: Array | None = None,
         dist_t: Array | None = None,
     ) -> EstimatorData:
-        """TODO."""
+        """Create the state from the given values with identity covariance.
+
+        Args:
+            pos: The position.
+            quat: The quaternion.
+            vel: The velocity.
+            ang_vel: The angular velocity.
+            rotor_vel: Optional, the rotor velocities.
+            dist_f: Optional, the disturbance forces.
+            dist_t: Optional, the disturbance torques.
+
+        Returns:
+            The state.
+        """
         batch_shape = pos.shape[:-1]
         dim_x = 13
         if rotor_vel is not None:
@@ -136,7 +161,14 @@ class EstimatorData:
 
     @classmethod
     def as_state_array(cls, data: EstimatorData) -> Array:
-        """Returns the state as an array."""
+        """Returns the state as an array.
+
+        Args:
+            data: The state of the estimator.
+
+        Returns:
+            The concatenated state of shape (..., dim_x).
+        """
         xp = data.pos.__array_namespace__()
         x = xp.concat((data.pos, data.quat, data.vel, data.ang_vel), axis=-1)
         if data.rotor_vel is not None:
@@ -149,7 +181,15 @@ class EstimatorData:
 
     @classmethod
     def from_state_array(cls, data: EstimatorData, array: Array) -> EstimatorData:
-        """Updates data in the given structure based on a given array."""
+        """Updates data in the given structure based on a given array.
+
+        Args:
+            data: The state of the estimator to update.
+            array: The state vector of shape (..., dim_x).
+
+        Returns:
+            The updated state.
+        """
         pos = array[..., 0:3]
         quat = array[..., 3:7]
         vel = array[..., 7:10]
@@ -183,7 +223,14 @@ class EstimatorData:
 
     @classmethod
     def get_state_dim(cls, data: EstimatorData) -> int:
-        """Returns the dimension of the state."""
+        """Returns the dimension of the state.
+
+        Args:
+            data: The state of the estimator.
+
+        Returns:
+            The dimension of the state, depending on the optional states.
+        """
         dim_x = 13
         if data.rotor_vel is not None:
             dim_x = dim_x + 4

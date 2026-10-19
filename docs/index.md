@@ -27,9 +27,10 @@ estimate = kf.correct(np.zeros(3), np.array([0.0, 0.0, 0.0, 1.0]))  # Measured p
 | Estimator | Class | Description |
 |---|---|---|
 | Differentiation-based filter | `DiffFilter` | Model free smoothing estimator. Low pass filters the measurements and their numerical derivatives. Needs no model and no inputs. |
-| UKF | `KalmanFilter` | Unscented Kalman Filter with the dynamics models of [crazyflow](https://github.com/learnsyslab/crazyflow). Uses the commands sent to the drone and can additionally estimate rotor velocities and disturbance forces and torques. |
+| EKF | `KalmanFilter(filter_type="EKF")` | Extended Kalman Filter with the dynamics models of [crazyflow](https://github.com/learnsyslab/crazyflow). Uses the commands sent to the drone and can additionally estimate rotor velocities and disturbance forces and torques. Propagates the covariance with the Jacobian of the dynamics at hover, computed with JAX. |
+| UKF | `KalmanFilter` | Unscented Kalman Filter with the same models and states as the EKF. Propagates the covariance with sigma points through the nonlinear dynamics. |
 
-The UKF supports every dynamics model of crazyflow (`first_principles`, `so_rpy`, `so_rpy_rotor`, `so_rpy_rotor_drag`) with every drone configuration the model has parameters for. For `first_principles`, see the warning in the [Quick Start](get-started/quick-start.md#unscented-kalman-filter).
+Both Kalman filters support every dynamics model of crazyflow (`first_principles`, `so_rpy`, `so_rpy_rotor`, `so_rpy_rotor_drag`) with every drone configuration the model has parameters for. For `first_principles`, see the warning in the [Quick Start](get-started/quick-start.md#unscented-kalman-filter).
 
 ## Array API, batching, and JIT
 

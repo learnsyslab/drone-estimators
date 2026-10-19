@@ -196,7 +196,7 @@ class MPEstimator:
                         "The differentiation-based filter does not support force or torque "
                         "estimation!"
                     )
-            case "ukf":
+            case "ekf" | "ukf":
                 self.input_needed = True
                 # The commands are converted from PWM to N like the onboard controller does
                 drone = Drone(self.settings.drone_config)
@@ -205,6 +205,7 @@ class MPEstimator:
                     dt=1 / self.frequency,
                     model=self.settings.dynamics_model,
                     config=self.settings.drone_config,
+                    filter_type=self.settings.estimator_type.upper(),
                     estimate_rotor_vel=self.settings.estimate_rotor_vel,
                     estimate_dist_f=self.settings.estimate_dist_f,
                     estimate_dist_t=self.settings.estimate_dist_t,
@@ -576,7 +577,7 @@ class MPEstimator:
         node.destroy_node()
 
     def close(self):
-        """TODO."""
+        """Stop the subscriber and publisher processes and save the data if enabled."""
         self.logger.info(f"Estimator {self.drone_names} shutdown")
         self._stop_event.set()
         self._sub_process.join()
@@ -596,7 +597,12 @@ class MPEstimator:
 
 
 def launch_estimators(estimators: dict):
-    """TODO."""
+    """Launch one process per batch of estimators and block until a keyboard interrupt.
+
+    Args:
+        estimators: The settings of each estimator, keyed by name. Estimators with identical
+            settings (except for the drone name) are run as one batch.
+    """
     processes = []
     seen_drone_names = []
     ctx = mp.get_context("spawn")
@@ -646,7 +652,12 @@ def launch_estimators(estimators: dict):
 
 
 def launch_node(settings: Munch, stop_event: Event):
-    """TODO."""
+    """Run an estimator node until the stop event is set.
+
+    Args:
+        settings: The estimator settings, including the names of all drones in the batch.
+        stop_event: Event that stops the estimator and its processes once set.
+    """
     rclpy.init()
     estimator = MPEstimator(settings, stop_event=stop_event)
     try:
@@ -663,7 +674,9 @@ if __name__ == "__main__":
     parser.add_argument("--settings", default=None, help="Path to settings file in CWD")
     parser.add_argument("--drone_name", default=None, help="Overwrite drone_name in estimator1")
     parser.add_argument(
-        "--estimator_type", choices=["diff", "ukf"], help="Overwrite estimator type in estimator1"
+        "--estimator_type",
+        choices=["diff", "ekf", "ukf"],
+        help="Overwrite estimator type in estimator1",
     )
     args = parser.parse_args()
 
