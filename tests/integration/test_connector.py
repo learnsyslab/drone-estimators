@@ -15,6 +15,8 @@ import pytest
 # Keep the test traffic on this machine, see node.py
 os.environ["ROS_AUTOMATIC_DISCOVERY_RANGE"] = "LOCALHOST"
 
+pytest.importorskip("rclpy", reason="needs ROS 2")
+
 import rclpy
 from geometry_msgs.msg import PoseStamped, TransformStamped, TwistStamped
 from rclpy.executors import SingleThreadedExecutor

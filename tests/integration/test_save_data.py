@@ -10,6 +10,9 @@ import pytest
 
 from drone_estimators.estimator_diff import DiffFilter
 from drone_estimators.estimator_kalman import KalmanFilter
+
+pytest.importorskip("rclpy", reason="needs ROS 2")
+
 from drone_estimators.ros.utils import append_state
 
 DIFF_PARAMS = (0.0001, 0.007, 0.09, 0.005, 0.07)  # As in the ROS node
