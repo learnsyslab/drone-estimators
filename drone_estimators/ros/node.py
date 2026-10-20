@@ -62,10 +62,6 @@ from drone_estimators.ros.utils import (
     tf2array,
 )
 
-# The jitted estimators need 64 bit precision. The numpy estimators are not affected. Since this
-# runs on import, it also applies to the spawned estimator processes.
-jax.config.update("jax_enable_x64", True)
-
 if TYPE_CHECKING:
     from multiprocessing.sharedctypes import SynchronizedArray
     from multiprocessing.synchronize import Barrier, Event
@@ -184,6 +180,11 @@ class MPEstimator:
         batch_shape, jit = (len(self.drone_names),), self.settings.jit_compile
         match self.settings.estimator_type:
             case "diff":
+                # The jitted differentiation-based filter needs 64 bit precision, the Kalman filters
+                # do not. Each batch of estimators runs in its own process, so this only affects
+                # the differentiation-based filters.
+                if jit and not jax.config.jax_enable_x64:
+                    jax.config.update("jax_enable_x64", True)
                 self.estimator = DiffFilter(
                     (0.0001, 0.007, 0.09, 0.005, 0.07), batch_shape=batch_shape, jit=jit
                 )

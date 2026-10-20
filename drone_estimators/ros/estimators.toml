@@ -11,13 +11,13 @@ integrator = "euler" # TODO add RK4
 jit_compile = true   # jit compile the estimators with jax for faster estimators
 
 [estimator1]
-estimator_type = "ukf"
+estimator_type = "diff"
 drone_name = "cf1"
 drone_config = "cf21B_500"
 dynamics_model = "so_rpy_rotor_drag"
 estimate_rotor_vel = true
 estimate_dist_f = true
-estimate_dist_t = false
+estimate_dist_t = true
 
 # [estimator2]
 # estimator_type = "ukf"
@@ -26,4 +26,4 @@ estimate_dist_t = false
 # dynamics_model = "fitted_DI_DD_rpyt"
 # estimate_rotor_vel = true
 # estimate_dist_f = true
-# estimate_dist_t = false
+# estimate_dist_t = true

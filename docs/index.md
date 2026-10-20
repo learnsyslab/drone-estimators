@@ -8,10 +8,7 @@ $$
 Welcome to **Drone Estimators** - a Python package providing state estimators for quadrotor drones. The estimators turn noisy pose measurements, e.g., from a motion capture system, into estimates of the full state: position, orientation, linear and angular velocity, and optionally rotor velocities and disturbance forces and torques.
 
 ```python
-import jax
 import numpy as np
-
-jax.config.update("jax_enable_x64", True)  # The jitted estimators need 64 bit precision
 
 from drone_estimators.estimator_kalman import KalmanFilter
 

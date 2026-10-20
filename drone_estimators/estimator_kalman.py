@@ -57,7 +57,7 @@ class KalmanFilter(Estimator):
             estimate_dist_t: If the disturbance torques should be estimated, defaults to False.
             initial_obs: Optional, the initial observation of the environment's state. See the environment's observation space for details.
             batch_shape: The batch dimensions, e.g., (n_drones,). All arrays have leading batch dimensions.
-            jit: If the filter should be jit compiled with jax. Requires 64 bit precision.
+            jit: If the filter should be jit compiled with jax.
         """
         fx = dynamics_function(model, config)
         hx = observation_function
@@ -87,12 +87,14 @@ class KalmanFilter(Estimator):
         Q, R = self.create_covariance_matrices(
             dim_x=dim_x,
             dim_z=dim_z,
-            varQ_pos=1e-6,
-            varQ_quat=1e-2,
+            varQ_pos=1e-3,
+            varQ_quat=10.0,
             varQ_rotor_vel=1e-5,
-            varR_pos=1e-9,
-            varR_quat=5e-9,
+            varR_pos=1e-7,
+            varR_quat=1e-5,
             dt=dt,
+            varQ_dist_f=1e-8,
+            varQ_dist_t=1e-13,
         )
 
         match filter_type:
@@ -103,9 +105,8 @@ class KalmanFilter(Estimator):
                 self.settings = EKFSettings.create(A=A, H=H, Q=Q, R=R, fx=fx, hx=hx)
                 predict, correct, predict_correct = ekf_predict, ekf_correct, ekf_predict_correct
             case "UKF":
-                sigma_settings = SigmaPointsSettings.create(
-                    n=dim_x, alpha=1e-3, beta=2.0, kappa=0.0
-                )
+                # alpha = 1 and kappa = 0 keeps the unscented transform well conditioned in 32 bit
+                sigma_settings = SigmaPointsSettings.create(n=dim_x, alpha=1.0, beta=2.0, kappa=0.0)
                 self.settings = UKFSettings.create(
                     SPsettings=sigma_settings, Q=Q, R=R, fx=fx, hx=hx
                 )
@@ -117,12 +118,6 @@ class KalmanFilter(Estimator):
         self._correct = partial(correct, settings=self.settings)
         self._predict_correct = partial(predict_correct, settings=self.settings)
         if jit:
-            # The covariances span many orders of magnitude, which 32 bit can't resolve
-            if not jax.config.jax_enable_x64:
-                raise RuntimeError(
-                    "The jitted Kalman filter needs 64 bit precision. "
-                    'Call jax.config.update("jax_enable_x64", True) before creating it.'
-                )
             self.data = jax.tree.map(jnp.asarray, self.data)
             self._predict = jax.jit(self._predict)
             self._correct = jax.jit(self._correct)
@@ -159,8 +154,8 @@ class KalmanFilter(Estimator):
         varR_pos: float,
         varR_quat: float,
         dt: float,
-        varQ_dist_f: float = 1e-11,
-        varQ_dist_t: float = 1e-18,  # TODO dist torque very noisy
+        varQ_dist_f: float = 1e-8,
+        varQ_dist_t: float = 1e-13,
     ) -> tuple[Array, Array]:
         """Creates sophisticated covariance matrices based on a paper.
 
@@ -199,35 +194,22 @@ class KalmanFilter(Estimator):
         Q[7:10, 0:3] = Q_xyz[3:6, 0:3]  # pos <-> vel
 
         # Rotational equations
-        # since quat and ang_vel have different length, it's a little more tricky
+        # quat and ang_vel have different lengths and the coupling quat_dot = 0.5 * quat x ang_vel
+        # depends on the state, so they are not correlated here: filling the whole 4x3 block with
+        # the cross term of the white noise model makes Q indefinite, which breaks the Cholesky
+        # decomposition of the sigma points once varQ_quat is large enough to matter.
         Q_rot = Q_discrete_white_noise(
             dim=2, dt=dt, var=varQ_quat, block_size=3, order_by_dim=False
         )  # quat & ang_vel
-        Q[3:5, 3:5] = Q_rot[0:2, 0:2]  # quat12
-        Q[5:7, 5:7] = Q_rot[0:2, 0:2]  # quat34
+        Q[3:7, 3:7] = np.eye(4) * Q_rot[0, 0]  # quat
         Q[10:13, 10:13] = Q_rot[3:6, 3:6]  # ang_vel
-        # We know that all quat_dot dependent on all ang_vel
-        # => fill in the whole 4x3 and 3x4 matrix blocks with the variance
-        Q[3:7, 10:13] = Q_rot[0, 3]  # quat <-> ang_vel
-        Q[10:13, 3:7] = Q_rot[3, 0]  # quat <-> ang_vel
 
         i = 13  # for keeping how big the state (index) is
 
-        # Motor forces TODO: maybe add correlation of acceleration (and angular acc) to motor forces
+        # Rotor velocities. They are not correlated with the velocities: the thrust acts along the
+        # body z axis only, and a dense cross block with the velocities makes Q indefinite.
         if self.data.rotor_vel is not None:
-            Q_forces = Q_discrete_white_noise(
-                dim=2, dt=dt, var=varQ_rotor_vel, block_size=1, order_by_dim=False
-            )  # Motor Forces
-            Q[i : i + 2, i : i + 2] = np.eye(2) * Q_forces[0, 0]  # forces 1&2
-            Q[i + 2 : i + 4, i + 2 : i + 4] = np.eye(2) * Q_forces[0, 0]  # forces 3&4
-            Q[7:10, i : i + 4] = Q_forces[0, 1]  # forces <-> vel
-            Q[i : i + 4, 7:10] = Q_forces[1, 0]  # forces <-> vel
-            Q[10:13, i : i + 4] = (
-                Q_forces[0, 1] * 0.04
-            )  # forces <-> ang_vel, times arm length (F=rxl)
-            Q[i : i + 4, 10:13] = (
-                Q_forces[1, 0] * 0.04
-            )  # forces <-> ang_vel, times arm length (F=rxl)
+            Q[i : i + 4, i : i + 4] = np.eye(4) * varQ_rotor_vel * dt**2
             i = i + 4
 
         # External forces and torques TODO Maybe make x and v dependend on F uncertainty and same for torque
@@ -244,6 +226,8 @@ class KalmanFilter(Estimator):
         # "high" measurements noise on the angles, estimate: 0.01 constains all values => std=3e-3 TODO look at new quat measurements
         R[3:, 3:] = R[3:, 3:] * varR_quat
 
+        eig_min = np.linalg.eigvalsh(Q).min()  # Only round-off below zero
+        assert eig_min >= -1e-9 * np.abs(Q).max(), f"The process noise is indefinite ({eig_min=})"
         return Q, R
 
     def step(

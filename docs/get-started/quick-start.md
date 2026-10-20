@@ -15,10 +15,7 @@ All estimators share the same interface: `set_state` initializes the estimate wi
 The `KalmanFilter` uses a dynamics model from [crazyflow](https://github.com/learnsyslab/crazyflow) to predict the state between measurements. Since the dynamics depend on what the drone is commanded to do, `predict` takes the latest command. The command has to match the input of the model, e.g., roll, pitch, yaw (rad) and collective thrust (N) for the `so_rpy` models, or the four motor velocities (RPM) for `first_principles`.
 
 ```python
-import jax
 import numpy as np
-
-jax.config.update("jax_enable_x64", True)  # The jitted estimators need 64 bit precision
 
 from drone_estimators.estimator_kalman import KalmanFilter
 
@@ -78,7 +75,7 @@ print(estimate.pos, estimate.vel, estimate.ang_vel)
 With `jit=True`, the filter functions are compiled with `jax.jit` on construction, so the first measurement is not delayed by the compilation. The UKF defaults to `jit=False`, the differentiation-based filter to `jit=True`.
 
 !!! warning "64 bit precision"
-    The jitted estimators need 64 bit precision. The covariances of the UKF span many orders of magnitude, and the numerical derivatives of the differentiation-based filter amplify rounding errors. Call `jax.config.update("jax_enable_x64", True)` before creating a jitted estimator, otherwise it raises a `RuntimeError`.
+    The jitted differentiation-based filter needs 64 bit precision, since its numerical derivatives amplify rounding errors. Call `jax.config.update("jax_enable_x64", True)` before creating it, otherwise it raises a `RuntimeError`. The Kalman filters run in 32 bit as well.
 
 ## Batching
 

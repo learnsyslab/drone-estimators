@@ -87,10 +87,6 @@ kf = KalmanFilter(dt=1 / 200, model="so_rpy", config="cf2x_L250", batch_shape=(1
 For faster estimation loops, jit compile the filter with JAX:
 
 ```python
-import jax
-
-jax.config.update("jax_enable_x64", True)  # The jitted filters need 64 bit precision
-
 kf = KalmanFilter(dt=1 / 200, model="so_rpy", config="cf2x_L250", batch_shape=(10,), jit=True)
 ```
 
